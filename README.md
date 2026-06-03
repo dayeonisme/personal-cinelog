@@ -1,49 +1,40 @@
-# *Cinelog*
-
-내 컴퓨터에서만 돌아가는 개인 영화 일지. 본 영화를 별점과 코멘트로 기록하고, 보고 싶은 영화를 모아두는 앱. 계정도, 클라우드도, 구독도 없음.
-
----
-
-## 기능
-
-### 홈
-등록한 모든 영화를 포스터 그리드로 표시. 카드에 마우스를 올리면 제목, 연도, 감독 정보가 나타남. 평가/보고싶어요 필터, 날짜·평점 정렬, 제목·감독·배우 통합 검색 지원.
-
-### 평가
-감상한 영화를 유연한 별점·코멘트 시스템으로 기록.
-
-- **별점** — 기본 종합 평점 (0~5점, 0.5 단위) + 원하는 만큼 커스텀 별점 추가 (예: *연출*, *OST*, *재관람 의향*)
-- **코멘트** — 기본 감상평 + 커스텀 코멘트 섹션 추가 가능. 마크다운 지원, 이미지 첨부 가능
-- **감상 상태** — 완료 / 진행중 / 중단 으로 구분
-- 이전에 등록한 별점명·코멘트명은 자동으로 기억되어 드롭다운으로 재사용 가능
-
-### 보고싶어요
-보고 싶은 영화를 큐에 담아두는 공간. 커스텀 코멘트 모듈로 메모 추가 가능. 제목, 감독, 배우로 검색 및 필터링 지원.
-
-### 영화 정보 자동 완성
-제목으로 검색하면 OMDb에서 실시간으로 결과를 불러오고, 선택 시 포스터·출연진·감독·장르·런타임이 자동으로 채워짐.
+# personal-cinelog
+본 영화 평가 및 보고싶어요 목록 관리 데스크탑 웹앱.
+영화 검색(OMDb) → 별점·코멘트 기록 → SQLite 로컬 저장 → localhost에서 실행.
 
 ---
 
-## 기술 스택
+## 폴더 구조
 
-| | |
-|---|---|
-| 백엔드 | Python · Flask · SQLAlchemy |
-| 데이터베이스 | SQLite (로컬 파일, 별도 설정 불필요) |
-| 프론트엔드 | Vanilla JS · HTML · CSS |
-| 영화 데이터 | [OMDb API](https://www.omdbapi.com/) — 무료 플랜, 1,000건/일 |
+```
+personal-cinelog/
+├── app.py                    # Flask 앱 & REST API
+├── models.py                 # SQLAlchemy 모델
+├── database.py               # DB 초기화
+├── requirements.txt
+├── install_autostart.sh      # macOS 로그인 시 자동 시작 등록 (launchd)
+├── run.sh                    # 수동 실행 스크립트
+├── static/
+│   ├── css/style.css
+│   ├── js/app.js
+│   └── uploads/              # 첨부 이미지 저장 폴더 (gitignored)
+└── templates/
+    └── index.html
+```
 
 ---
 
-## 시작하기
+## 설정 전 필수 사항
 
-### 사전 준비
+**OMDb API 키 발급**
 
-- Python 3.10 이상
-- OMDb 무료 API 키 발급 → [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx)
+[omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx) 에서 무료 등록 (1,000건/일).
 
-### 설치
+---
+
+## 설치 및 실행
+
+### Step 1 — 클론 및 의존성 설치
 
 ```bash
 git clone https://github.com/dayeonisme/personal-cinelog.git
@@ -51,10 +42,17 @@ cd personal-cinelog
 pip3 install -r requirements.txt
 ```
 
-### 실행
+### Step 2 — 환경 변수 설정
 
 ```bash
 export OMDB_API_KEY="발급받은_키"
+```
+
+영구 적용하려면 `~/.zshrc`에 추가.
+
+### Step 3 — 실행
+
+```bash
 python app.py
 ```
 
@@ -64,13 +62,13 @@ python app.py
 
 ## macOS 자동 시작 설정
 
-Mac 로그인 시 Cinelog가 자동으로 시작되도록 등록:
+로그인 시 자동 실행되도록 launchd에 등록:
 
 ```bash
 bash install_autostart.sh
 ```
 
-제거하려면:
+제거:
 
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.cinelog.app.plist
@@ -79,39 +77,53 @@ rm ~/Library/LaunchAgents/com.cinelog.app.plist
 
 ---
 
-## 프로젝트 구조
+## 수동 실행
 
-```
-cinelog/
-├── app.py                   # Flask 앱 & REST API
-├── models.py                # SQLAlchemy 모델
-├── database.py              # DB 초기화
-├── requirements.txt
-├── install_autostart.sh     # macOS launchd 등록 스크립트
-├── static/
-│   ├── css/style.css
-│   ├── js/app.js
-│   └── uploads/             # 첨부 이미지 저장 폴더 (gitignore 처리)
-└── templates/
-    └── index.html
+```bash
+# 환경 변수 포함해서 실행
+OMDB_API_KEY="발급받은_키" python app.py
 ```
 
 ---
 
-## 데이터 구조
+## 데이터 모델
 
 ```
 Movie
-└── Entry  (타입: review | watchlist)
-    ├── RatingModule   이름 · 이모지 · 점수 (0–5)
-    └── CommentModule  이름 · 내용 (마크다운) · 이미지[]
+└── Entry  (type: review | watchlist)
+    ├── RatingModule   이름 · 이모지 · 점수 (0~5, 0.5 단위)
+    └── CommentModule  이름 · 내용 (Markdown) · 이미지[]
 ```
+
+- **RatingTemplate** — 이전에 등록한 커스텀 별점명 목록 (재사용 드롭다운용)
+- **CommentTemplate** — 이전에 등록한 커스텀 코멘트명 목록 (재사용 드롭다운용)
 
 ---
 
-## 디자인
+## API 엔드포인트
 
-Cinematic dark-mode. 따뜻한 블랙·에스프레소 배경, 브론즈/골드 포인트, 세이지 그린 상태 표시. 디스플레이 타이포그래피는 *Cormorant Garamond* 이탤릭 사용.
+| 메서드 | 경로 | 설명 |
+|--------|------|------|
+| GET | `/api/entries` | 목록 조회 (type, sort, filter, search, page) |
+| POST | `/api/entries` | 새 항목 등록 |
+| PUT | `/api/entries/<id>` | 수정 |
+| DELETE | `/api/entries/<id>` | 삭제 |
+| GET | `/api/search/movies?q=` | OMDb 영화 검색 |
+| GET | `/api/search/movies/<imdb_id>` | 영화 상세 조회 |
+| POST | `/api/upload` | 이미지 첨부 |
+| GET | `/api/templates/ratings` | 커스텀 별점명 목록 |
+| GET | `/api/templates/comments` | 커스텀 코멘트명 목록 |
+
+---
+
+## 커밋하지 않는 파일 (.gitignore)
+
+| 파일 | 이유 |
+|------|------|
+| `*.db`, `*.db-journal` | 개인 영화 기록 DB |
+| `static/uploads/*` | 사용자 첨부 이미지 |
+| `.env` | API 키 등 환경 변수 |
+| `logs/` | 런타임 로그 |
 
 ---
 
