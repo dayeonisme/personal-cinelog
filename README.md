@@ -1,55 +1,49 @@
 # *Cinelog*
 
-A personal movie journal that lives entirely on your computer. Log films you've watched with ratings and notes, keep a watchlist of films to see — no accounts, no cloud, no subscriptions.
+내 컴퓨터에서만 돌아가는 개인 영화 일지. 본 영화를 별점과 코멘트로 기록하고, 보고 싶은 영화를 모아두는 앱. 계정도, 클라우드도, 구독도 없음.
 
 ---
 
-## Screenshots
+## 기능
 
-> Run locally and open `http://localhost:5001` to see it in action.
+### 홈
+등록한 모든 영화를 포스터 그리드로 표시. 카드에 마우스를 올리면 제목, 연도, 감독 정보가 나타남. 평가/보고싶어요 필터, 날짜·평점 정렬, 제목·감독·배우 통합 검색 지원.
 
----
+### 평가
+감상한 영화를 유연한 별점·코멘트 시스템으로 기록.
 
-## Features
+- **별점** — 기본 종합 평점 (0~5점, 0.5 단위) + 원하는 만큼 커스텀 별점 추가 (예: *연출*, *OST*, *재관람 의향*)
+- **코멘트** — 기본 감상평 + 커스텀 코멘트 섹션 추가 가능. 마크다운 지원, 이미지 첨부 가능
+- **감상 상태** — 완료 / 진행중 / 중단 으로 구분
+- 이전에 등록한 별점명·코멘트명은 자동으로 기억되어 드롭다운으로 재사용 가능
 
-### Home
-Poster grid of everything you've logged. Hover a card to reveal the title, year, and director. Filter between reviews and watchlist entries, sort by date or rating, and search across titles, directors, and cast.
+### 보고싶어요
+보고 싶은 영화를 큐에 담아두는 공간. 커스텀 코멘트 모듈로 메모 추가 가능. 제목, 감독, 배우로 검색 및 필터링 지원.
 
-### Reviews
-Log watched films with a flexible rating and comment system.
-
-- **Star ratings** — default overall rating (0–5 in 0.5 steps) plus optional custom-named ratings (e.g. *Cinematography*, *Soundtrack*, *Rewatch Value*)
-- **Comments** — default review note plus optional custom comment sections, each with Markdown support and inline image attachments
-- **Watch status** — mark entries as *Completed*, *In Progress*, or *Dropped*
-- Custom rating and comment names are remembered and suggested as you type
-
-### Watchlist
-Queue films you want to see. Add freeform notes with custom comment modules. Search and filter your queue by title, director, or cast.
-
-### Movie data
-Search by title and select from live OMDb results — poster, cast, director, genre, and runtime fill in automatically.
+### 영화 정보 자동 완성
+제목으로 검색하면 OMDb에서 실시간으로 결과를 불러오고, 선택 시 포스터·출연진·감독·장르·런타임이 자동으로 채워짐.
 
 ---
 
-## Tech Stack
+## 기술 스택
 
 | | |
 |---|---|
-| Backend | Python, Flask, SQLAlchemy |
-| Database | SQLite (local file, no setup required) |
-| Frontend | Vanilla JS, HTML, CSS |
-| Movie data | [OMDb API](https://www.omdbapi.com/) — free tier, 1,000 req/day |
+| 백엔드 | Python · Flask · SQLAlchemy |
+| 데이터베이스 | SQLite (로컬 파일, 별도 설정 불필요) |
+| 프론트엔드 | Vanilla JS · HTML · CSS |
+| 영화 데이터 | [OMDb API](https://www.omdbapi.com/) — 무료 플랜, 1,000건/일 |
 
 ---
 
-## Getting Started
+## 시작하기
 
-### Prerequisites
+### 사전 준비
 
-- Python 3.10+
-- A free OMDb API key → [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx)
+- Python 3.10 이상
+- OMDb 무료 API 키 발급 → [omdbapi.com/apikey.aspx](https://www.omdbapi.com/apikey.aspx)
 
-### Install
+### 설치
 
 ```bash
 git clone https://github.com/dayeonisme/personal-cinelog.git
@@ -57,26 +51,26 @@ cd personal-cinelog
 pip3 install -r requirements.txt
 ```
 
-### Run
+### 실행
 
 ```bash
-export OMDB_API_KEY="your_key_here"
+export OMDB_API_KEY="발급받은_키"
 python app.py
 ```
 
-Open **http://localhost:5001**.
+브라우저에서 **http://localhost:5001** 접속.
 
 ---
 
-## Auto-start on Login (macOS)
+## macOS 자동 시작 설정
 
-Register Cinelog as a login item so it starts automatically with your Mac:
+Mac 로그인 시 Cinelog가 자동으로 시작되도록 등록:
 
 ```bash
 bash install_autostart.sh
 ```
 
-To uninstall:
+제거하려면:
 
 ```bash
 launchctl unload ~/Library/LaunchAgents/com.cinelog.app.plist
@@ -85,40 +79,40 @@ rm ~/Library/LaunchAgents/com.cinelog.app.plist
 
 ---
 
-## Project Structure
+## 프로젝트 구조
 
 ```
 cinelog/
-├── app.py                   # Flask application & REST API
-├── models.py                # SQLAlchemy models
-├── database.py              # Database initialisation
+├── app.py                   # Flask 앱 & REST API
+├── models.py                # SQLAlchemy 모델
+├── database.py              # DB 초기화
 ├── requirements.txt
-├── install_autostart.sh     # macOS launchd registration
+├── install_autostart.sh     # macOS launchd 등록 스크립트
 ├── static/
 │   ├── css/style.css
 │   ├── js/app.js
-│   └── uploads/             # User-attached images (gitignored)
+│   └── uploads/             # 첨부 이미지 저장 폴더 (gitignore 처리)
 └── templates/
     └── index.html
 ```
 
 ---
 
-## Data Model
+## 데이터 구조
 
 ```
 Movie
-└── Entry  (type: review | watchlist)
-    ├── RatingModule   name · emoji · value (0–5)
-    └── CommentModule  name · content (Markdown) · images[]
+└── Entry  (타입: review | watchlist)
+    ├── RatingModule   이름 · 이모지 · 점수 (0–5)
+    └── CommentModule  이름 · 내용 (마크다운) · 이미지[]
 ```
 
 ---
 
-## Design
+## 디자인
 
-Cinematic dark-mode interface with a retro-futuristic terminal aesthetic — warm black and espresso backgrounds, bronze/gold accents, muted sage status indicators, and *Cormorant Garamond* italic for display typography.
+Cinematic dark-mode. 따뜻한 블랙·에스프레소 배경, 브론즈/골드 포인트, 세이지 그린 상태 표시. 디스플레이 타이포그래피는 *Cormorant Garamond* 이탤릭 사용.
 
 ---
 
-*Personal use only. Not affiliated with IMDb or OMDb.*
+*개인 사용 목적. IMDb 및 OMDb와 무관합니다.*
