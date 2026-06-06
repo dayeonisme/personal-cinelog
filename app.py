@@ -13,9 +13,27 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, 'static', 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# OMDb API key – free tier from https://www.omdbapi.com/apikey.aspx
-# Set via environment variable or replace the default below
-OMDB_API_KEY = os.environ.get('OMDB_API_KEY', 'YOUR_FREE_OMDB_KEY')
+
+def load_local_env():
+    env_path = os.path.join(BASE_DIR, '.env')
+    if not os.path.exists(env_path):
+        return
+    with open(env_path, encoding='utf-8') as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith('#') or '=' not in line:
+                continue
+            key, value = line.split('=', 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+load_local_env()
+
+# TMDb API credentials. Prefer the v4 access token; v3 api_key also works.
+TMDB_ACCESS_TOKEN = os.environ.get('TMDB_ACCESS_TOKEN')
+TMDB_API_KEY = os.environ.get('TMDB_API_KEY')
+TMDB_API_BASE = 'https://api.themoviedb.org/3'
+TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w342'
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'movies.db')}"
@@ -24,8 +42,28 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload limit
 CORS(app)
 db.init_app(app)
 
+
+def ensure_movie_schema():
+    columns = {
+        row[1]
+        for row in db.session.execute(db.text("PRAGMA table_info(movies)")).fetchall()
+    }
+    migrations = {
+        'tmdb_id': "ALTER TABLE movies ADD COLUMN tmdb_id VARCHAR(20)",
+        'title_ko': "ALTER TABLE movies ADD COLUMN title_ko VARCHAR(500)",
+        'title_en': "ALTER TABLE movies ADD COLUMN title_en VARCHAR(500)",
+        'director_ko': "ALTER TABLE movies ADD COLUMN director_ko VARCHAR(500)",
+        'director_en': "ALTER TABLE movies ADD COLUMN director_en VARCHAR(500)",
+    }
+    for column, statement in migrations.items():
+        if column not in columns:
+            db.session.execute(db.text(statement))
+    db.session.commit()
+
+
 with app.app_context():
     db.create_all()
+    ensure_movie_schema()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -33,6 +71,84 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _tmdb_configured():
+    return bool(TMDB_ACCESS_TOKEN or TMDB_API_KEY)
+
+
+def _tmdb_headers():
+    if TMDB_ACCESS_TOKEN:
+        return {'Authorization': f'Bearer {TMDB_ACCESS_TOKEN}'}
+    return {}
+
+
+def _tmdb_params(params):
+    merged = dict(params)
+    if not TMDB_ACCESS_TOKEN and TMDB_API_KEY:
+        merged['api_key'] = TMDB_API_KEY
+    return merged
+
+
+def _tmdb_poster_url(path):
+    return f'{TMDB_IMAGE_BASE}{path}' if path else None
+
+
+def _release_year(release_date):
+    return release_date[:4] if release_date else None
+
+
+def _tmdb_search_result_to_movie(item):
+    tmdb_id = item.get('id')
+    title_ko = item.get('title') or item.get('original_title') or ''
+    title_en = item.get('original_title') or title_ko
+    return {
+        'imdb_id': f'tmdb:{tmdb_id}',
+        'title': title_ko,
+        'title_ko': title_ko,
+        'title_en': title_en,
+        'year': _release_year(item.get('release_date')),
+        'poster_url': _tmdb_poster_url(item.get('poster_path')),
+    }
+
+
+def _tmdb_detail_to_movie(data):
+    credits = data.get('credits') or {}
+    crew = credits.get('crew') or []
+    cast = credits.get('cast') or []
+    directors = [p.get('name') for p in crew if p.get('job') == 'Director' and p.get('name')]
+    director_names_en = [
+        p.get('original_name') or p.get('name')
+        for p in crew
+        if p.get('job') == 'Director' and (p.get('original_name') or p.get('name'))
+    ]
+    actors = [p.get('name') for p in cast[:5] if p.get('name')]
+    genres = [g.get('name') for g in data.get('genres', []) if g.get('name')]
+    runtime = data.get('runtime')
+    external_ids = data.get('external_ids') or {}
+
+    title_ko = data.get('title') or data.get('original_title') or ''
+    title_en = data.get('original_title') or title_ko
+    director_ko = ', '.join(directors)
+    director_en = ', '.join(director_names_en) or director_ko
+
+    return {
+        'imdb_id': f"tmdb:{data.get('id')}",
+        'tmdb_id': str(data.get('id')) if data.get('id') else None,
+        'external_imdb_id': external_ids.get('imdb_id') or data.get('imdb_id'),
+        'title': title_ko,
+        'title_ko': title_ko,
+        'title_en': title_en,
+        'year': _release_year(data.get('release_date')),
+        'director': director_ko,
+        'director_ko': director_ko,
+        'director_en': director_en,
+        'actors': ', '.join(actors),
+        'plot': data.get('overview'),
+        'poster_url': _tmdb_poster_url(data.get('poster_path')),
+        'genre': ', '.join(genres),
+        'runtime': f'{runtime} min' if runtime else None,
+    }
 
 
 # ── Frontend ─────────────────────────────────────────────────────────────────
@@ -45,69 +161,63 @@ def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
 
 
-# ── Movie Search (OMDb) ───────────────────────────────────────────────────────
+# ── Movie Search (TMDb) ───────────────────────────────────────────────────────
 @app.route('/api/search/movies')
 def search_movies():
     query = request.args.get('q', '').strip()
     if not query:
         return jsonify([])
 
-    if OMDB_API_KEY == 'YOUR_FREE_OMDB_KEY':
-        # Fallback: return empty with instructions
-        return jsonify({'error': 'OMDb API 키가 설정되지 않았습니다. .env 파일에 OMDB_API_KEY를 설정해주세요.'}), 400
+    if not _tmdb_configured():
+        return jsonify({'error': 'TMDb API 키가 설정되지 않았습니다. TMDB_ACCESS_TOKEN 또는 TMDB_API_KEY를 설정해주세요.'}), 400
 
     try:
-        resp = requests.get('https://www.omdbapi.com/', params={
-            'apikey': OMDB_API_KEY,
-            's': query,
-            'type': 'movie',
-        }, timeout=10)
+        resp = requests.get(
+            f'{TMDB_API_BASE}/search/movie',
+            params=_tmdb_params({
+                'query': query,
+                'language': 'ko-KR',
+                'region': 'KR',
+                'include_adult': 'false',
+                'page': 1,
+            }),
+            headers=_tmdb_headers(),
+            timeout=10,
+        )
         data = resp.json()
-        if data.get('Response') == 'True':
-            results = []
-            for item in data.get('Search', []):
-                results.append({
-                    'imdb_id': item.get('imdbID'),
-                    'title': item.get('Title'),
-                    'year': item.get('Year'),
-                    'poster_url': item.get('Poster') if item.get('Poster') != 'N/A' else None,
-                })
-            return jsonify(results)
-        return jsonify([])
+        return jsonify([_tmdb_search_result_to_movie(item) for item in data.get('results', [])])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/search/movies/<imdb_id>')
-def get_movie_detail(imdb_id):
+@app.route('/api/search/movies/<movie_key>')
+def get_movie_detail(movie_key):
     # Check local DB first
-    movie = Movie.query.filter_by(imdb_id=imdb_id).first()
+    movie = Movie.query.filter_by(imdb_id=movie_key).first()
     if movie:
         return jsonify(movie.to_dict())
 
-    if OMDB_API_KEY == 'YOUR_FREE_OMDB_KEY':
-        return jsonify({'error': 'OMDb API 키 미설정'}), 400
+    if not movie_key.startswith('tmdb:'):
+        return jsonify({'error': '지원하지 않는 영화 ID입니다.'}), 400
+
+    if not _tmdb_configured():
+        return jsonify({'error': 'TMDb API 키 미설정'}), 400
 
     try:
-        resp = requests.get('https://www.omdbapi.com/', params={
-            'apikey': OMDB_API_KEY,
-            'i': imdb_id,
-            'plot': 'short',
-        }, timeout=10)
+        tmdb_id = movie_key.split(':', 1)[1]
+        resp = requests.get(
+            f'{TMDB_API_BASE}/movie/{tmdb_id}',
+            params=_tmdb_params({
+                'language': 'ko-KR',
+                'append_to_response': 'credits,external_ids',
+            }),
+            headers=_tmdb_headers(),
+            timeout=10,
+        )
         data = resp.json()
-        if data.get('Response') == 'True':
-            return jsonify({
-                'imdb_id': data.get('imdbID'),
-                'title': data.get('Title'),
-                'year': data.get('Year'),
-                'director': data.get('Director'),
-                'actors': data.get('Actors'),
-                'plot': data.get('Plot'),
-                'poster_url': data.get('Poster') if data.get('Poster') != 'N/A' else None,
-                'genre': data.get('Genre'),
-                'runtime': data.get('Runtime'),
-            })
-        return jsonify({'error': '영화를 찾을 수 없습니다.'}), 404
+        if data.get('success') is False:
+            return jsonify({'error': data.get('status_message', '영화를 찾을 수 없습니다.')}), 404
+        return jsonify(_tmdb_detail_to_movie(data))
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -120,6 +230,9 @@ def list_entries():
     watch_status = request.args.get('watch_status')
     search = request.args.get('search', '').strip()
     search_field = request.args.get('search_field', 'all')
+    watchlist_kind = request.args.get('watchlist_kind')
+    scope = request.args.get('scope')
+    lang = request.args.get('lang', 'ko')
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 20))
 
@@ -129,6 +242,20 @@ def list_entries():
         q = q.filter(Entry.entry_type == entry_type)
     if watch_status:
         q = q.filter(Entry.watch_status == watch_status)
+
+    from sqlalchemy.orm import aliased
+    ReviewEntry = aliased(Entry)
+    review_exists = db.session.query(ReviewEntry.id).filter(
+        ReviewEntry.movie_id == Movie.id,
+        ReviewEntry.entry_type == 'review',
+    ).exists()
+
+    if scope == 'home':
+        from sqlalchemy import or_
+        q = q.filter(or_(Entry.entry_type != 'watchlist', ~review_exists))
+
+    if entry_type == 'watchlist' and watchlist_kind in {'wish', 'rewatch'}:
+        q = q.filter(review_exists if watchlist_kind == 'rewatch' else ~review_exists)
 
     if search:
         if search_field == 'title':
@@ -170,7 +297,7 @@ def list_entries():
         'total': total,
         'page': page,
         'per_page': per_page,
-        'items': [e.to_dict() for e in entries],
+        'items': [e.to_dict(lang=lang) for e in entries],
     })
 
 
@@ -185,9 +312,18 @@ def create_entry():
     if not movie:
         movie = Movie(
             imdb_id=movie_data.get('imdb_id'),
+            tmdb_id=movie_data.get('tmdb_id') or (
+                movie_data.get('imdb_id', '').split(':', 1)[1]
+                if movie_data.get('imdb_id', '').startswith('tmdb:')
+                else None
+            ),
             title=movie_data.get('title', ''),
+            title_ko=movie_data.get('title_ko') or movie_data.get('title', ''),
+            title_en=movie_data.get('title_en') or movie_data.get('title', ''),
             year=movie_data.get('year'),
             director=movie_data.get('director'),
+            director_ko=movie_data.get('director_ko') or movie_data.get('director'),
+            director_en=movie_data.get('director_en') or movie_data.get('director'),
             actors=movie_data.get('actors'),
             plot=movie_data.get('plot'),
             poster_url=movie_data.get('poster_url'),
