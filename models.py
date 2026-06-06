@@ -6,9 +6,14 @@ class Movie(db.Model):
     __tablename__ = 'movies'
     id = db.Column(db.Integer, primary_key=True)
     imdb_id = db.Column(db.String(20), unique=True, nullable=True)
+    tmdb_id = db.Column(db.String(20), nullable=True)
     title = db.Column(db.String(500), nullable=False)
+    title_ko = db.Column(db.String(500))
+    title_en = db.Column(db.String(500))
     year = db.Column(db.String(10))
     director = db.Column(db.String(500))
+    director_ko = db.Column(db.String(500))
+    director_en = db.Column(db.String(500))
     actors = db.Column(db.String(1000))
     plot = db.Column(db.Text)
     poster_url = db.Column(db.String(1000))
@@ -18,13 +23,25 @@ class Movie(db.Model):
 
     entries = db.relationship('Entry', backref='movie', lazy=True, cascade='all, delete-orphan')
 
-    def to_dict(self):
+    def to_dict(self, lang='ko'):
+        title_ko = self.title_ko or self.title
+        director_ko = self.director_ko or self.director
+        title_en = self.title_en or self.title
+        director_en = self.director_en or self.director
+        display_title = title_en if lang == 'en' and title_en else title_ko
+        display_director = director_en if lang == 'en' and director_en else director_ko
+
         return {
             'id': self.id,
             'imdb_id': self.imdb_id,
-            'title': self.title,
+            'tmdb_id': self.tmdb_id,
+            'title': display_title,
+            'title_ko': title_ko,
+            'title_en': title_en,
             'year': self.year,
-            'director': self.director,
+            'director': display_director,
+            'director_ko': director_ko,
+            'director_en': director_en,
             'actors': self.actors,
             'plot': self.plot,
             'poster_url': self.poster_url,
@@ -48,13 +65,25 @@ class Entry(db.Model):
     comments = db.relationship('CommentModule', backref='entry', lazy=True,
                                cascade='all, delete-orphan', order_by='CommentModule.order')
 
-    def to_dict(self):
+    def watchlist_kind(self):
+        if self.entry_type != 'watchlist':
+            return None
+        has_review = Entry.query.filter(
+            Entry.movie_id == self.movie_id,
+            Entry.entry_type == 'review',
+        ).first() is not None
+        return 'rewatch' if has_review else 'wish'
+
+    def to_dict(self, lang='ko'):
+        watchlist_kind = self.watchlist_kind()
         return {
             'id': self.id,
             'movie_id': self.movie_id,
-            'movie': self.movie.to_dict(),
+            'movie': self.movie.to_dict(lang=lang),
             'entry_type': self.entry_type,
             'watch_status': self.watch_status,
+            'watchlist_kind': watchlist_kind,
+            'watchlist_label': '다시 보고싶어요' if watchlist_kind == 'rewatch' else ('보고싶어요' if watchlist_kind == 'wish' else None),
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat(),
             'ratings': [r.to_dict() for r in self.ratings],

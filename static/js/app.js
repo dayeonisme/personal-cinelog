@@ -7,6 +7,7 @@
 // ── State ─────────────────────────────────────────────────────
 const state = {
   currentPage: 'home',
+  language: 'ko',
   registerType: 'review',   // 'review' | 'watchlist'
   editingEntryId: null,
   selectedMovie: null,
@@ -18,6 +19,7 @@ const state = {
   // filters
   homeFilter: 'all', homeSort: 'newest',
   reviewFilter: 'all', reviewSort: 'newest',
+  watchlistFilter: 'all',
   watchlistSort: 'newest',
   homeSearch: '', homeSearchField: 'all',
   reviewSearch: '', reviewSearchField: 'all',
@@ -74,6 +76,8 @@ async function loadHome(reset = false) {
     page: state.homePage,
     per_page: 40,
     sort: state.homeSort,
+    scope: 'home',
+    lang: state.language,
   });
   if (state.homeFilter !== 'all') params.set('type', state.homeFilter);
   if (state.homeSearch) {
@@ -103,7 +107,10 @@ function renderHomeGrid() {
     const typeBadge = entry.entry_type === 'review' ? '평가' : '보고싶어요';
     const poster = m.poster_url
       ? `<img class="movie-card-poster" src="${m.poster_url}" alt="${escHtml(m.title)}" loading="lazy">`
-      : `<div class="movie-card-no-poster">${escHtml(m.title)}</div>`;
+      : `<div class="movie-card-no-poster">
+          <span class="no-poster-kicker">NO POSTER</span>
+          <span class="no-poster-title">${escHtml(m.title)}</span>
+        </div>`;
     const year = m.year ? `(${m.year})` : '';
     const director = m.director && m.director !== 'N/A' ? m.director : '';
     return `
@@ -136,6 +143,7 @@ async function loadReviews(reset = false) {
     page: state.reviewPage,
     per_page: 20,
     sort: state.reviewSort,
+    lang: state.language,
   });
   if (state.reviewFilter !== 'all') params.set('watch_status', state.reviewFilter);
   if (state.reviewSearch) {
@@ -181,7 +189,9 @@ async function loadWatchlist(reset = false) {
     page: state.watchlistPage,
     per_page: 20,
     sort: state.watchlistSort,
+    lang: state.language,
   });
+  if (state.watchlistFilter !== 'all') params.set('watchlist_kind', state.watchlistFilter);
   if (state.watchlistSearch) {
     params.set('search', state.watchlistSearch);
     params.set('search_field', state.watchlistSearchField);
@@ -223,11 +233,17 @@ function buildEntryCard(entry) {
 
   const poster = m.poster_url
     ? `<img class="entry-poster" src="${m.poster_url}" alt="${escHtml(m.title)}" loading="lazy">`
-    : `<div class="entry-poster-placeholder">NO<br>POSTER</div>`;
+    : `<div class="entry-poster-placeholder">
+        <span>NO POSTER</span>
+        <strong>${escHtml(m.title)}</strong>
+      </div>`;
 
   const statusBadgeMap = { completed: '완료', in_progress: '진행중', stopped: '중단' };
   const statusBadge = entry.watch_status
     ? `<span class="entry-status-badge status-${entry.watch_status}">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`
+    : '';
+  const watchlistBadge = !isReview && entry.watchlist_label
+    ? `<span class="entry-status-badge watchlist-kind-${entry.watchlist_kind}">${escHtml(entry.watchlist_label)}</span>`
     : '';
 
   // Ratings
@@ -280,6 +296,7 @@ function buildEntryCard(entry) {
                 ${entry.updated_at !== entry.created_at ? ` · 수정 ${fmtDate(entry.updated_at)}` : ''}
               </div>
               ${statusBadge}
+              ${watchlistBadge}
             </div>
           </div>
           ${ratingsHtml}
@@ -854,6 +871,21 @@ document.querySelectorAll('.gnb-btn').forEach(btn => {
 $('review-fab').onclick = () => openRegisterPage('review');
 $('watchlist-fab').onclick = () => openRegisterPage('watchlist');
 
+function refreshCurrentPage() {
+  if (state.currentPage === 'home') loadHome(true);
+  else if (state.currentPage === 'review') loadReviews(true);
+  else if (state.currentPage === 'watchlist') loadWatchlist(true);
+}
+
+document.querySelectorAll('.lang-toggle-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('.lang-toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.language = btn.dataset.lang;
+    refreshCurrentPage();
+  };
+});
+
 // ── Sort & Filter Listeners ──────────────────────────────────────
 
 // Home filters
@@ -895,6 +927,14 @@ $('review-search-input').addEventListener('keydown', e => {
 });
 
 // Watchlist
+document.querySelectorAll('#page-watchlist .filter-btn').forEach(btn => {
+  btn.onclick = () => {
+    document.querySelectorAll('#page-watchlist .filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.watchlistFilter = btn.dataset.filter;
+    loadWatchlist(true);
+  };
+});
 $('watchlist-sort').onchange = () => { state.watchlistSort = $('watchlist-sort').value; loadWatchlist(true); };
 $('watchlist-search-btn').onclick = () => {
   state.watchlistSearch = $('watchlist-search-input').value.trim();

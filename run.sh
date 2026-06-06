@@ -1,8 +1,12 @@
 #!/bin/bash
 # CINELOG 실행 스크립트
-# OMDb 무료 API 키 발급: https://www.omdbapi.com/apikey.aspx
+# TMDb API 키 설정은 .env 파일의 TMDB_ACCESS_TOKEN 또는 TMDB_API_KEY를 사용합니다.
 
-export OMDB_API_KEY="${OMDB_API_KEY:-YOUR_FREE_OMDB_KEY}"
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
 
 pip install -r requirements.txt -q
 
