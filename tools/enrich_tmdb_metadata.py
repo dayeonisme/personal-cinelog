@@ -70,6 +70,16 @@ def canonical_title(title: str) -> str:
     return value
 
 
+def normalize_person_name(name: str) -> str:
+    return re.sub(r"[^0-9a-z가-힣ぁ-ゟ゠-ヿ一-龯]+", "", (name or "").casefold())
+
+
+def directors_match(source_directors: list, candidate_directors: list) -> bool:
+    source = {normalize_person_name(name) for name in source_directors if normalize_person_name(name)}
+    candidate = {normalize_person_name(name) for name in candidate_directors if normalize_person_name(name)}
+    return bool(source and candidate and source.intersection(candidate))
+
+
 def search_queries_for_title(title: str) -> list:
     candidates = []
 
@@ -164,6 +174,20 @@ def detail_to_updates(data: Dict) -> Dict[str, Optional[str]]:
         "genre": ", ".join(genres) or None,
         "runtime": f"{runtime} min" if runtime else None,
     }
+
+
+def detail_directors(data: Dict) -> list:
+    credits = data.get("credits") or {}
+    crew = credits.get("crew") or []
+    names = []
+    for person in crew:
+        if person.get("job") != "Director":
+            continue
+        for key in ("name", "original_name"):
+            name = person.get(key)
+            if name and name not in names:
+                names.append(name)
+    return names
 
 
 def apply_updates(movie: Movie, updates: Dict[str, Optional[str]]) -> None:
@@ -465,6 +489,145 @@ def apply_manual_matches(
     return result
 
 
+def apply_watchapedia_hints(
+    hints_csv: Path,
+    commit: bool,
+    report_path: Path,
+    retries: int,
+) -> EnrichResult:
+    if not tmdb_configured():
+        raise RuntimeError("TMDb API credential is not configured.")
+
+    result = EnrichResult()
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with hints_csv.open(encoding="utf-8") as f, report_path.open("w", newline="", encoding="utf-8") as report:
+        reader = csv.DictReader(f)
+        writer = csv.DictWriter(
+            report,
+            fieldnames=[
+                "watcha_id",
+                "movie_id",
+                "title",
+                "year",
+                "watcha_directors",
+                "status",
+                "tmdb_id",
+                "tmdb_title",
+                "tmdb_year",
+                "tmdb_directors",
+                "error",
+            ],
+        )
+        writer.writeheader()
+
+        for row in reader:
+            watcha_id = (row.get("watcha_id") or "").strip()
+            title = (row.get("title_ko") or "").strip()
+            year = (row.get("year") or "").strip() or None
+            source_directors = [
+                name.strip()
+                for name in (row.get("directors") or "").split("|")
+                if name.strip()
+            ]
+            if not watcha_id or not title or not source_directors:
+                continue
+
+            result.checked += 1
+            movie = Movie.query.filter_by(imdb_id=watcha_id).first()
+            if not movie:
+                result.not_found += 1
+                writer.writerow(
+                    {
+                        "watcha_id": watcha_id,
+                        "movie_id": "",
+                        "title": title,
+                        "year": year or "",
+                        "watcha_directors": "|".join(source_directors),
+                        "status": "movie_not_found",
+                    }
+                )
+                continue
+
+            try:
+                candidates = []
+                seen_ids = set()
+                for query in search_queries_for_title(title):
+                    search_data = search_movie(query, year, retries)
+                    for item in search_data.get("results", []):
+                        tmdb_id = item.get("id")
+                        if tmdb_id in seen_ids:
+                            continue
+                        seen_ids.add(tmdb_id)
+                        if not choose_match(title, year, [item]):
+                            continue
+                        if year and release_year(item.get("release_date")) != year:
+                            continue
+                        detail = get_movie_detail(int(tmdb_id), retries=retries)
+                        candidate_directors = detail_directors(detail)
+                        if directors_match(source_directors, candidate_directors):
+                            candidates.append((item, detail, candidate_directors))
+
+                if len(candidates) != 1:
+                    if len(candidates) == 0:
+                        result.not_found += 1
+                        status = "not_found"
+                    else:
+                        result.skipped_low_confidence += 1
+                        status = "multiple_candidates"
+                    writer.writerow(
+                        {
+                            "watcha_id": watcha_id,
+                            "movie_id": movie.id,
+                            "title": title,
+                            "year": year or "",
+                            "watcha_directors": "|".join(source_directors),
+                            "status": status,
+                            "error": f"{len(candidates)} candidates",
+                        }
+                    )
+                    continue
+
+                item, detail, candidate_directors = candidates[0]
+                updates = detail_to_updates(detail)
+                if commit:
+                    apply_updates(movie, updates)
+                result.updated += 1
+                writer.writerow(
+                    {
+                        "watcha_id": watcha_id,
+                        "movie_id": movie.id,
+                        "title": title,
+                        "year": year or "",
+                        "watcha_directors": "|".join(source_directors),
+                        "status": "updated" if commit else "would_update",
+                        "tmdb_id": item.get("id"),
+                        "tmdb_title": item.get("title"),
+                        "tmdb_year": release_year(item.get("release_date")) or "",
+                        "tmdb_directors": "|".join(candidate_directors),
+                    }
+                )
+            except Exception as exc:
+                result.errors += 1
+                writer.writerow(
+                    {
+                        "watcha_id": watcha_id,
+                        "movie_id": getattr(movie, "id", ""),
+                        "title": title,
+                        "year": year or "",
+                        "watcha_directors": "|".join(source_directors),
+                        "status": "error",
+                        "error": str(exc),
+                    }
+                )
+
+    if commit:
+        db.session.commit()
+    else:
+        db.session.rollback()
+    return result
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Enrich imported WatchaPedia movies with TMDb metadata and posters."
@@ -480,11 +643,19 @@ def main() -> None:
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--strict-unique-year", action="store_true")
     parser.add_argument("--manual-matches", type=Path)
+    parser.add_argument("--watcha-hints", type=Path)
     parser.add_argument("--report", type=Path, default=Path("data/tmdb_enrichment_report.csv"))
     args = parser.parse_args()
 
     with app.app_context():
-        if args.manual_matches:
+        if args.watcha_hints:
+            result = apply_watchapedia_hints(
+                hints_csv=args.watcha_hints,
+                commit=args.commit,
+                report_path=args.report,
+                retries=args.retries,
+            )
+        elif args.manual_matches:
             result = apply_manual_matches(
                 manual_csv=args.manual_matches,
                 commit=args.commit,
