@@ -3,11 +3,14 @@ from tools.enrich_tmdb_metadata import (
     canonical_title,
     choose_match,
     detail_to_updates,
+    directors_match,
+    normalize_person_name,
     search_queries_for_title,
     search_unique_title_year_match,
     poster_url,
 )
 import tools.enrich_tmdb_metadata as enrichment
+from tools.enrich_watchapedia_hints import extract_detail_year_from_text, extract_directors_from_text
 
 
 class FakeMovie:
@@ -169,6 +172,12 @@ def test_search_unique_title_year_match_rejects_multiple_year_matches(monkeypatc
     assert result is None
 
 
+def test_directors_match_normalizes_spacing_and_case():
+    assert normalize_person_name("J.J. 에이브럼스") == "jj에이브럼스"
+    assert directors_match(["J.J. 에이브럼스"], ["J. J. 에이브럼스"])
+    assert not directors_match(["왕가위"], ["리들리 스콧"])
+
+
 def test_detail_to_updates_extracts_poster_and_bilingual_metadata():
     updates = detail_to_updates(
         {
@@ -266,3 +275,28 @@ def test_apply_manual_matches_updates_movies_from_csv(tmp_path, monkeypatch):
     assert movie.director_ko == "나홍진"
     assert movie.poster_url == poster_url("/wailing.jpg")
     assert fake_session.committed is True
+
+
+def test_extract_directors_from_watchapedia_detail_text():
+    text = """출연/제작
+나홍진
+감독
+곽도원
+주연 | 종구
+홍길동
+감독
+"""
+
+    assert extract_directors_from_text(text) == ["나홍진", "홍길동"]
+
+
+def test_extract_detail_year_from_watchapedia_detail_text_ignores_numeric_title():
+    text = """1917
+1917
+2019 · 전쟁/드라마 · 미국
+출연/제작
+샘 멘데스
+감독
+"""
+
+    assert extract_detail_year_from_text(text) == "2019"
