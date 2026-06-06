@@ -17,6 +17,7 @@ def configure_test_db(tmp_path):
     global TEST_DB_CONFIGURED
     if not TEST_DB_CONFIGURED:
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{tmp_path / 'test.db'}"
+        app._got_first_request = False
         app.extensions.pop("sqlalchemy", None)
         db.init_app(app)
         TEST_DB_CONFIGURED = True
