@@ -163,6 +163,17 @@
     <button class="fab" id="watchlist-fab" title="보고싶어요 등록">+</button>
   </div>
 
+  <!-- MOVIE DETAIL PAGE -->
+  <div id="page-movie" class="page">
+    <div class="register-header">
+      <button class="back-btn" id="movie-back-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 5l-7 7 7 7"/></svg>
+        돌아가기
+      </button>
+    </div>
+    <div id="movie-detail-content"></div>
+  </div>
+
   <!-- REGISTER PAGE -->
   <div id="page-register" class="page">
     <div class="register-header">
@@ -228,6 +239,17 @@
         <h3 class="step-title">코멘트</h3>
         <div id="comments-modules"></div>
         <button class="add-module-btn" id="add-comment-btn">+ 코멘트 추가</button>
+      </div>
+
+      <div class="form-section">
+        <h3 class="step-title">해시태그</h3>
+        <div class="hashtag-editor">
+          <div class="hashtag-chips" id="hashtag-chips"></div>
+          <div class="hashtag-input-wrap">
+            <input type="text" id="hashtag-input" class="hashtag-input" placeholder="해시태그를 입력하고 Enter (과거 등록한 태그는 자동완성)" autocomplete="off">
+            <div class="hashtag-dropdown" id="hashtag-dropdown" style="display:none"></div>
+          </div>
+        </div>
       </div>
 
       <div class="register-actions">

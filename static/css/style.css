@@ -340,6 +340,11 @@ img { display: block; }
   font-family: var(--font-mono);
   font-size: 13px; color: var(--accent); letter-spacing: 0.03em;
 }
+.movie-card-overlay-rating {
+  font-family: var(--font-mono);
+  font-size: 14px; color: var(--text); letter-spacing: 0.05em; margin-top: 6px;
+}
+.movie-card-overlay-rating .star-disp { font-size: 14px; vertical-align: -2px; margin-right: 6px; }
 
 .movie-card-type-badge {
   position: absolute; top: 7px; left: 7px;
@@ -366,7 +371,7 @@ img { display: block; }
 .entry-card.type-review { border-left-color: var(--review-border); }
 .entry-card.type-watchlist { border-left-color: var(--watchlist-border); }
 
-.entry-card-inner { display: flex; gap: 24px; }
+.entry-card-inner { display: flex; gap: 24px; cursor: pointer; }
 
 .entry-poster {
   flex-shrink: 0; width: 100px; height: 150px;
@@ -456,12 +461,63 @@ img { display: block; }
 .kebab-menu button:hover { background: var(--bg-hover); color: var(--text); }
 .kebab-menu button.danger:hover { color: #c06060; }
 
+/* Hashtags */
+.hashtag-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+.hashtag-chip {
+  font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.03em;
+  color: var(--accent); border: 1px solid var(--border-gold);
+  padding: 3px 10px; background: rgba(138,115,64,.08);
+}
+
+/* Hashtag editor (register page) */
+.hashtag-editor { display: flex; flex-direction: column; gap: 12px; }
+.hashtag-chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.hashtag-chips:empty { display: none; }
+.hashtag-chip-editable {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 14px; letter-spacing: 0.03em;
+  color: var(--accent); border: 1px solid var(--border-gold);
+  padding: 5px 8px 5px 12px; background: rgba(138,115,64,.08);
+}
+.hashtag-chip-editable button {
+  color: var(--text-dim); font-size: 16px; line-height: 1; padding: 0 2px;
+  transition: color 0.12s;
+}
+.hashtag-chip-editable button:hover { color: var(--accent-err); }
+.hashtag-input-wrap { position: relative; max-width: 420px; }
+.hashtag-input {
+  width: 100%; background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text); padding: 12px 16px; font-family: var(--font-mono);
+  font-size: 15px; outline: none; transition: border-color 0.15s;
+}
+.hashtag-input:focus { border-color: var(--accent); }
+.hashtag-dropdown {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--bg-surface); border: 1px solid var(--border-gold);
+  max-height: 220px; overflow-y: auto; z-index: 30;
+}
+.hashtag-dropdown-item {
+  display: block; width: 100%; padding: 10px 16px; text-align: left;
+  font-family: var(--font-mono); font-size: 14px; color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+}
+.hashtag-dropdown-item:hover { background: var(--bg-hover); color: var(--text); }
+
 /* Ratings */
 .ratings-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
 .rating-chip { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 15px; }
 .rating-chip-name  { color: var(--text-muted); }
-.rating-chip-stars { color: var(--accent); letter-spacing: 1px; font-size: 16px; }
+.rating-chip-stars { display: inline-flex; gap: 1px; font-size: 24px; }
 .rating-chip-value { color: var(--text); }
+
+/* Layered star display (정확한 0.5점 반채움 표현) */
+.star-disp { position: relative; display: inline-block; width: 1em; height: 1em; line-height: 1; }
+.star-disp-bg, .star-disp-fg {
+  position: absolute; top: 0; left: 0;
+  font-size: inherit; line-height: 1; white-space: nowrap; overflow: hidden;
+}
+.star-disp-bg { color: var(--border); width: 100%; }
+.star-disp-fg { color: var(--accent); width: 0; }
 
 /* Comments */
 .comment-modules { display: flex; flex-direction: column; gap: 14px; }
@@ -474,6 +530,15 @@ img { display: block; }
   font-size: 17px; color: var(--text); line-height: 1.8;
 }
 .comment-module-content p { margin-bottom: 5px; }
+.comment-module-content ul,
+.comment-module-content ol {
+  padding-left: 1.5em; margin: 6px 0 12px;
+}
+.comment-module-content li { margin-bottom: 4px; padding-left: 0.2em; }
+.comment-module-content blockquote {
+  margin: 8px 0; padding-left: 14px;
+  border-left: 2px solid var(--border-gold); color: var(--text-muted);
+}
 .comment-module-content code {
   font-family: var(--font-mono); font-size: 13px;
   background: var(--bg-surface); padding: 1px 5px; border: 1px solid var(--border);
@@ -505,6 +570,65 @@ img { display: block; }
   transition: transform 0.18s, box-shadow 0.18s; z-index: 5;
 }
 .fab:hover { transform: scale(1.1); box-shadow: 0 6px 28px rgba(138,115,64,.7); }
+
+/* ═══════════════════════════════════════════════════════════
+   MOVIE DETAIL PAGE
+   ═══════════════════════════════════════════════════════════ */
+.movie-detail-hero {
+  display: flex; gap: 32px; margin-bottom: 36px;
+  padding-bottom: 32px; border-bottom: 1px solid var(--border-gold);
+}
+.movie-detail-poster {
+  flex-shrink: 0; width: 220px; height: 330px;
+  object-fit: cover; border: 1px solid var(--border);
+}
+.movie-detail-poster-placeholder {
+  flex-shrink: 0; width: 220px; height: 330px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; text-align: center; padding: 16px;
+  background: var(--bg-surface); border: 1px solid var(--border); color: var(--text-muted);
+}
+.movie-detail-info { flex: 1; min-width: 0; }
+.movie-detail-title {
+  font-family: var(--font-serif); font-size: 36px; font-weight: 600;
+  color: var(--text); line-height: 1.2; margin-bottom: 10px;
+}
+.movie-detail-director {
+  font-family: var(--font-mono); font-size: 16px; color: var(--accent); margin-bottom: 18px; letter-spacing: 0.03em;
+}
+.movie-detail-meta-grid {
+  display: grid; grid-template-columns: 110px 1fr; row-gap: 10px; column-gap: 16px;
+  font-family: var(--font-mono); font-size: 15px;
+}
+.movie-detail-meta-grid dt { color: var(--text-dim); letter-spacing: 0.06em; }
+.movie-detail-meta-grid dd { color: var(--text-muted); }
+
+.movie-detail-section { margin-bottom: 36px; }
+.movie-detail-section-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-bottom: 18px; padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.movie-detail-section-title {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--font-serif); font-size: 24px; font-weight: 600;
+  color: var(--text); margin: 0;
+}
+.movie-detail-section-title .badge {
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em;
+  padding: 3px 10px; border: 1px solid; font-weight: 400;
+}
+.movie-detail-section.review .movie-detail-section-title .badge { color: var(--review-border); border-color: var(--review-border); }
+.movie-detail-section.watchlist .movie-detail-section-title .badge { color: var(--watchlist-border); border-color: var(--watchlist-border); }
+.movie-detail-edit-btn {
+  flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
+  color: var(--accent); background: transparent; border: 1px solid var(--accent);
+  padding: 6px 16px; cursor: pointer; transition: background 0.15s, color 0.15s;
+}
+.movie-detail-edit-btn:hover { background: var(--accent); color: var(--bg-card); }
+.movie-detail-empty {
+  font-family: var(--font-mono); font-size: 14px; color: var(--text-dim); letter-spacing: 0.04em;
+}
 
 /* ═══════════════════════════════════════════════════════════
    REGISTER PAGE
@@ -631,6 +755,16 @@ img { display: block; }
   color: var(--text-dim); font-size: 20px; line-height: 1; transition: color 0.15s;
 }
 .module-remove-btn:hover { color: var(--accent-err); }
+
+/* 별점 모듈 드래그 정렬 핸들 */
+.module-drag-handle {
+  cursor: grab; color: var(--text-dim); font-size: 16px; line-height: 1;
+  letter-spacing: -1px; user-select: none; padding: 2px 4px;
+}
+.module-drag-handle:active { cursor: grabbing; }
+.module-drag-handle-locked { cursor: default; font-size: 13px; opacity: 0.6; }
+.module-box.module-draggable { transition: opacity 0.12s, transform 0.12s; }
+.module-box.module-draggable.dragging { opacity: 0.4; border-color: var(--accent); }
 
 /* Star rating */
 .star-rating-input { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
