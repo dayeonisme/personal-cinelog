@@ -27,6 +27,9 @@ const state = {
   // templates
   ratingTemplates: [],
   commentTemplates: [],
+  // hashtags
+  hashtagPool: [],
+  selectedHashtags: [],
 };
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -38,21 +41,82 @@ const API = async (path, opts = {}) => {
 const $ = id => document.getElementById(id);
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
 
-function renderStars(value, max = 5) {
+// 레이어 방식으로 별을 그려 0.5점 단위 반채움을 정확히 표현 (깨진 이모지 문제 해결)
+function renderStarsHtml(value, max = 5) {
   let html = '';
   for (let i = 1; i <= max; i++) {
-    if (value >= i) html += '★';
-    else if (value >= i - 0.5) html += '½';
-    else html += '☆';
+    let pct = 0;
+    if (value >= i) pct = 100;
+    else if (value >= i - 0.5) pct = 50;
+    html += `<span class="star-disp"><span class="star-disp-bg">★</span><span class="star-disp-fg" style="width:${pct}%">★</span></span>`;
   }
   return html;
+}
+
+function fmtRuntime(runtime) {
+  if (!runtime) return '';
+  const minutes = parseInt(String(runtime).replace(/[^0-9]/g, ''), 10);
+  if (!minutes || isNaN(minutes)) return '';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h && m) return `${h}시간 ${m}분`;
+  if (h) return `${h}시간`;
+  return `${m}분`;
+}
+
+function defaultRatingOf(entry) {
+  if (!entry || !entry.ratings) return null;
+  const d = entry.ratings.find(r => r.is_default) || entry.ratings[0];
+  return (d && d.value != null) ? d.value : null;
+}
+
+// 왓챠에서 마이그레이션된 평점명에서 "왓챠" 표기를 제거
+function displayRatingName(name) {
+  if (!name) return name;
+  return name.replace(/^왓챠\s*/, '').trim() || '평점';
+}
+
+function buildRatingsHtml(ratings) {
+  if (!ratings || ratings.length === 0) return '';
+  const chips = ratings.map(r => {
+    const stars = renderStarsHtml(r.value || 0);
+    return `<div class="rating-chip">
+      <span class="rating-chip-name">${r.emoji || '⭐'} ${escHtml(displayRatingName(r.name))}</span>
+      <span class="rating-chip-stars">${stars}</span>
+      <span class="rating-chip-value">${r.value != null ? r.value.toFixed(1) : '–'}</span>
+    </div>`;
+  }).join('');
+  return `<div class="ratings-row">${chips}</div>`;
+}
+
+function buildCommentsHtml(comments) {
+  if (!comments || comments.length === 0) return '';
+  const blocks = comments.map(c => {
+    const md = (c.content && typeof marked !== 'undefined')
+      ? `<div class="comment-module-content md-content">${marked.parse(c.content || '')}</div>`
+      : `<div class="comment-module-content">${escHtml(c.content || '')}</div>`;
+    const imgs = (c.images && c.images.length > 0)
+      ? `<div class="comment-module-images">${c.images.map(u => `<img src="${u}" alt="" loading="lazy">`).join('')}</div>`
+      : '';
+    return `<div class="comment-module-block">
+      <div class="comment-module-name">${escHtml(c.name)}</div>
+      ${md}
+      ${imgs}
+    </div>`;
+  }).join('');
+  return `<div class="comment-modules">${blocks}</div>`;
+}
+
+function buildHashtagsHtml(hashtags) {
+  if (!hashtags || hashtags.length === 0) return '';
+  return `<div class="hashtag-row">${hashtags.map(h => `<span class="hashtag-chip">#${escHtml(h.name)}</span>`).join('')}</div>`;
 }
 
 function showModal(id) { $(id).style.display = 'flex'; }
 function hideModal(id) { $(id).style.display = 'none'; }
 
 // ── Navigation ─────────────────────────────────────────────────
-function navigateTo(page) {
+function navigateTo(page, opts = {}) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.gnb-btn').forEach(b => b.classList.remove('active'));
   $(`page-${page}`).classList.add('active');
@@ -63,6 +127,35 @@ function navigateTo(page) {
   if (page === 'home') loadHome(true);
   else if (page === 'review') loadReviews(true);
   else if (page === 'watchlist') loadWatchlist(true);
+
+  if (!opts.skipPush) {
+    pushNavState({ view: 'page', page });
+  }
+}
+
+// ── 브라우저 히스토리 연동 (앱 내 이동 시 '뒤로가기'가 앱을 벗어나지 않도록) ──
+function pushNavState(navState) {
+  history.pushState(navState, '', '');
+}
+
+window.addEventListener('popstate', e => {
+  const s = e.state;
+  if (!s || s.view === 'page') {
+    navigateTo((s && s.page) || 'home', { skipPush: true });
+  } else if (s.view === 'movie') {
+    state.movieDetailFrom = s.from || 'home';
+    navigateToMovie(s.movieId, { skipPush: true });
+  } else if (s.view === 'register') {
+    reopenRegisterFromHistory(s);
+  }
+});
+
+async function reopenRegisterFromHistory(s) {
+  let entryData = null;
+  if (s.entryId) {
+    try { entryData = await API(`/api/entries/${s.entryId}`); } catch (err) { /* ignore */ }
+  }
+  await openRegisterPage(s.registerType, entryData, { skipPush: true, fromPageOverride: s.from });
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -113,22 +206,21 @@ function renderHomeGrid() {
         </div>`;
     const year = m.year ? `(${m.year})` : '';
     const director = m.director && m.director !== 'N/A' ? m.director : '';
+    const rating = defaultRatingOf(entry);
+    const ratingHtml = rating != null
+      ? `<div class="movie-card-overlay-rating">${renderStarsHtml(rating)} ${rating.toFixed(1)}/5.0</div>`
+      : '';
     return `
-      <div class="movie-card ${typeClass}" data-entry-id="${entry.id}" onclick="handleHomeCardClick(${entry.id}, '${entry.entry_type}')">
+      <div class="movie-card ${typeClass}" data-entry-id="${entry.id}" onclick="navigateToMovie(${m.id})">
         ${poster}
         <span class="movie-card-type-badge">${typeBadge}</span>
         <div class="movie-card-overlay">
           <div class="movie-card-overlay-title">${escHtml(m.title)} ${year}</div>
           ${director ? `<div class="movie-card-overlay-sub">${escHtml(director)}</div>` : ''}
+          ${ratingHtml}
         </div>
       </div>`;
   }).join('');
-}
-
-function handleHomeCardClick(entryId, type) {
-  if (type === 'review') navigateTo('review');
-  else navigateTo('watchlist');
-  // Could highlight the card — for now just navigate
 }
 
 // ══════════════════════════════════════════════════════════════
@@ -246,42 +338,13 @@ function buildEntryCard(entry) {
     ? `<span class="entry-status-badge watchlist-kind-${entry.watchlist_kind}">${escHtml(entry.watchlist_label)}</span>`
     : '';
 
-  // Ratings
-  let ratingsHtml = '';
-  if (entry.ratings && entry.ratings.length > 0) {
-    const chips = entry.ratings.map(r => {
-      const stars = renderStars(r.value || 0);
-      return `<div class="rating-chip">
-        <span class="rating-chip-name">${r.emoji || '⭐'} ${escHtml(r.name)}</span>
-        <span class="rating-chip-stars">${stars}</span>
-        <span class="rating-chip-value">${r.value != null ? r.value.toFixed(1) : '–'}</span>
-      </div>`;
-    }).join('');
-    ratingsHtml = `<div class="ratings-row">${chips}</div>`;
-  }
-
-  // Comments
-  let commentsHtml = '';
-  if (entry.comments && entry.comments.length > 0) {
-    const blocks = entry.comments.map(c => {
-      const md = (c.content && typeof marked !== 'undefined')
-        ? `<div class="comment-module-content md-content">${marked.parse(c.content || '')}</div>`
-        : `<div class="comment-module-content">${escHtml(c.content || '')}</div>`;
-      const imgs = (c.images && c.images.length > 0)
-        ? `<div class="comment-module-images">${c.images.map(u => `<img src="${u}" alt="" loading="lazy">`).join('')}</div>`
-        : '';
-      return `<div class="comment-module-block">
-        <div class="comment-module-name">${escHtml(c.name)}</div>
-        ${md}
-        ${imgs}
-      </div>`;
-    }).join('');
-    commentsHtml = `<div class="comment-modules">${blocks}</div>`;
-  }
+  const ratingsHtml = isReview ? buildRatingsHtml(entry.ratings) : '';
+  const commentsHtml = buildCommentsHtml(entry.comments);
+  const hashtagsHtml = buildHashtagsHtml(entry.hashtags);
 
   return `
     <div class="entry-card ${typeClass}" data-entry-id="${entry.id}">
-      <div class="entry-card-inner">
+      <div class="entry-card-inner" onclick="navigateToMovie(${m.id})">
         ${poster}
         <div class="entry-body">
           <div class="entry-header">
@@ -300,6 +363,7 @@ function buildEntryCard(entry) {
             </div>
           </div>
           ${ratingsHtml}
+          ${hashtagsHtml}
           ${commentsHtml}
         </div>
       </div>
@@ -343,10 +407,125 @@ $('modal-delete-confirm').onclick = async () => {
 $('modal-name-error-close').onclick = () => hideModal('modal-name-error');
 
 // ══════════════════════════════════════════════════════════════
+// MOVIE DETAIL PAGE
+// ══════════════════════════════════════════════════════════════
+function navigateToMovie(movieId, opts = {}) {
+  if (state.currentPage !== 'movie') state.movieDetailFrom = state.currentPage;
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.gnb-btn').forEach(b => b.classList.remove('active'));
+  $('page-movie').classList.add('active');
+  state.currentPage = 'movie';
+  loadMovieDetail(movieId);
+
+  if (!opts.skipPush) {
+    pushNavState({ view: 'movie', movieId, from: state.movieDetailFrom || 'home' });
+  }
+}
+
+$('movie-back-btn').onclick = () => history.back();
+
+async function loadMovieDetail(movieId) {
+  $('movie-detail-content').innerHTML = '<div class="loading-indicator">로딩 중...</div>';
+  const data = await API(`/api/movies/${movieId}?lang=${state.language}`);
+  if (data.error) {
+    $('movie-detail-content').innerHTML = `<div class="empty-state">${escHtml(data.error)}</div>`;
+    return;
+  }
+  renderMovieDetail(data);
+}
+
+function renderMovieDetail(data) {
+  const m = data.movie;
+  const year = m.year ? `(${m.year})` : '';
+  const director = m.director && m.director !== 'N/A' ? m.director : '';
+
+  const poster = m.poster_url
+    ? `<img class="movie-detail-poster" src="${m.poster_url}" alt="${escHtml(m.title)}">`
+    : `<div class="movie-detail-poster-placeholder"><span class="no-poster-kicker">NO POSTER</span><span class="no-poster-title">${escHtml(m.title)}</span></div>`;
+
+  const metaRows = [
+    ['배우', m.actors && m.actors !== 'N/A' ? m.actors : null],
+    ['장르', m.genre && m.genre !== 'N/A' ? m.genre : null],
+    ['러닝타임', fmtRuntime(m.runtime) || null],
+    ['국가', m.country && m.country !== 'N/A' ? m.country : null],
+  ].filter(([, v]) => v);
+  const metaHtml = metaRows.length
+    ? `<dl class="movie-detail-meta-grid">${metaRows.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${escHtml(v)}</dd>`).join('')}</dl>`
+    : '';
+
+  const reviewSection = data.review
+    ? buildMovieDetailEntrySection('review', '평가 정보', data.review)
+    : `<div class="movie-detail-section review">
+        <div class="movie-detail-section-header">
+          <h2 class="movie-detail-section-title">평가 정보 <span class="badge">미등록</span></h2>
+        </div>
+        <div class="movie-detail-empty">아직 등록된 평가가 없습니다.</div>
+      </div>`;
+
+  const watchlistSection = data.watchlist
+    ? buildMovieDetailEntrySection('watchlist', '보고싶어요 정보', data.watchlist)
+    : `<div class="movie-detail-section watchlist">
+        <div class="movie-detail-section-header">
+          <h2 class="movie-detail-section-title">보고싶어요 정보 <span class="badge">미등록</span></h2>
+        </div>
+        <div class="movie-detail-empty">아직 등록된 보고싶어요가 없습니다.</div>
+      </div>`;
+
+  $('movie-detail-content').innerHTML = `
+    <div class="movie-detail-hero">
+      ${poster}
+      <div class="movie-detail-info">
+        <h1 class="movie-detail-title">${escHtml(m.title)} ${year}</h1>
+        ${director ? `<div class="movie-detail-director">감독 · ${escHtml(director)}</div>` : ''}
+        ${metaHtml}
+      </div>
+    </div>
+    ${reviewSection}
+    ${watchlistSection}
+  `;
+}
+
+function buildMovieDetailEntrySection(kind, title, entry) {
+  const isReview = kind === 'review';
+  const statusBadgeMap = { completed: '완료', in_progress: '진행중', stopped: '중단' };
+  let badge = '';
+  if (isReview && entry.watch_status) {
+    badge = `<span class="badge">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`;
+  } else if (!isReview && entry.watchlist_label) {
+    badge = `<span class="badge">${escHtml(entry.watchlist_label)}</span>`;
+  }
+  const ratingsHtml = isReview ? buildRatingsHtml(entry.ratings) : '';
+  const commentsHtml = buildCommentsHtml(entry.comments);
+  const hashtagsHtml = buildHashtagsHtml(entry.hashtags);
+  return `
+    <div class="movie-detail-section ${kind}">
+      <div class="movie-detail-section-header">
+        <h2 class="movie-detail-section-title">${escHtml(title)} ${badge}</h2>
+        <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
+      </div>
+      ${ratingsHtml}
+      ${hashtagsHtml}
+      ${commentsHtml}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════
 // REGISTER PAGE
 // ══════════════════════════════════════════════════════════════
 
-function openRegisterPage(type, entryData = null) {
+async function loadStep2Resources() {
+  const [rt, ct, ht] = await Promise.all([
+    API('/api/templates/ratings'),
+    API('/api/templates/comments'),
+    API('/api/hashtags'),
+  ]);
+  state.ratingTemplates = rt;
+  state.commentTemplates = ct;
+  state.hashtagPool = ht;
+}
+
+async function openRegisterPage(type, entryData = null, opts = {}) {
+  const fromPage = opts.fromPageOverride || (state.currentPage === 'register' ? 'review' : state.currentPage) || 'review';
   state.registerType = type;
   state.editingEntryId = entryData ? entryData.id : null;
   state.selectedMovie = null;
@@ -360,14 +539,16 @@ function openRegisterPage(type, entryData = null) {
   $('ratings-section').style.display = type === 'review' ? 'block' : 'none';
 
   // Reset steps
-  showStep(1);
   resetStep2();
 
   if (entryData) {
-    // Pre-fill from existing entry
+    // 수정 모드: 영화 검색 단계를 건너뛰고 바로 정보 수정 화면으로 진입
     state.selectedMovie = entryData.movie;
     setSelectedMovieUI(entryData.movie);
     $('step1-next-btn').disabled = false;
+
+    await loadStep2Resources();
+    setSelectedHashtags(entryData.hashtags || []);
 
     // Fill step 2
     if (type === 'review') {
@@ -415,9 +596,18 @@ function openRegisterPage(type, entryData = null) {
         }
       });
     }
+
+    // 수정 모드: 영화 검색(1단계)을 건너뛰고 정보 수정(2단계)부터 시작
+    showStep(2);
+  } else {
+    showStep(1);
   }
 
-  navigateTo('register');
+  navigateTo('register', { skipPush: true });
+
+  if (!opts.skipPush) {
+    pushNavState({ view: 'register', registerType: type, entryId: state.editingEntryId, from: fromPage });
+  }
 }
 
 function showStep(n) {
@@ -437,7 +627,76 @@ function resetStep2() {
   // Reset comments
   $('comments-modules').innerHTML = '';
   addDefaultCommentModule();
+
+  // Reset hashtags
+  setSelectedHashtags([]);
+  $('hashtag-input').value = '';
+  hideHashtagDropdown();
 }
+
+// ══════════════════════════════════════════════════════════════
+// HASHTAGS (평가/보고싶어요 공통)
+// ══════════════════════════════════════════════════════════════
+function setSelectedHashtags(hashtags) {
+  state.selectedHashtags = (hashtags || []).map(h => h.name);
+  renderHashtagChips();
+}
+
+function renderHashtagChips() {
+  $('hashtag-chips').innerHTML = state.selectedHashtags.map(name => `
+    <span class="hashtag-chip-editable">#${escHtml(name)}<button type="button" onclick="removeHashtag('${escAttr(name)}')">×</button></span>
+  `).join('');
+}
+
+function addHashtag(rawName) {
+  const name = (rawName || '').trim().replace(/^#/, '');
+  if (!name) return;
+  if (!state.selectedHashtags.includes(name)) {
+    state.selectedHashtags.push(name);
+    renderHashtagChips();
+  }
+  $('hashtag-input').value = '';
+  hideHashtagDropdown();
+}
+
+function removeHashtag(name) {
+  state.selectedHashtags = state.selectedHashtags.filter(n => n !== name);
+  renderHashtagChips();
+}
+
+function hideHashtagDropdown() {
+  const dd = $('hashtag-dropdown');
+  dd.style.display = 'none';
+  dd.innerHTML = '';
+}
+
+function showHashtagDropdown(query) {
+  const dd = $('hashtag-dropdown');
+  const q = (query || '').trim().replace(/^#/, '').toLowerCase();
+  const candidates = state.hashtagPool
+    .map(h => h.name)
+    .filter(name => !state.selectedHashtags.includes(name))
+    .filter(name => !q || name.toLowerCase().includes(q));
+  if (candidates.length === 0) { hideHashtagDropdown(); return; }
+  dd.innerHTML = candidates.map(name =>
+    `<button type="button" class="hashtag-dropdown-item" onclick="addHashtag('${escAttr(name)}')">#${escHtml(name)}</button>`
+  ).join('');
+  dd.style.display = 'block';
+}
+
+$('hashtag-input').addEventListener('focus', () => showHashtagDropdown($('hashtag-input').value));
+$('hashtag-input').addEventListener('input', () => showHashtagDropdown($('hashtag-input').value));
+$('hashtag-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addHashtag($('hashtag-input').value);
+  } else if (e.key === 'Escape') {
+    hideHashtagDropdown();
+  }
+});
+document.addEventListener('click', e => {
+  if (!e.target.closest('.hashtag-input-wrap')) hideHashtagDropdown();
+});
 
 // ── Movie Search ────────────────────────────────────────────────
 $('reg-movie-search-btn').onclick = searchMovieForReg;
@@ -490,7 +749,8 @@ function setSelectedMovieUI(movie) {
   $('reg-title').textContent = `${movie.title}${movie.year ? ` (${movie.year})` : ''}`;
   $('reg-year-director').textContent = movie.director && movie.director !== 'N/A' ? `감독: ${movie.director}` : '';
   $('reg-actors').textContent = movie.actors && movie.actors !== 'N/A' ? `출연: ${movie.actors}` : '';
-  $('reg-genre').textContent = movie.genre && movie.genre !== 'N/A' ? movie.genre : '';
+  const extra = [movie.genre, fmtRuntime(movie.runtime), movie.country].filter(v => v && v !== 'N/A');
+  $('reg-genre').textContent = extra.join(' · ');
 }
 
 $('reg-reselect-btn').onclick = () => {
@@ -502,12 +762,14 @@ $('reg-reselect-btn').onclick = () => {
 
 $('step1-next-btn').onclick = async () => {
   // Load templates before step 2
-  const [rt, ct] = await Promise.all([
+  const [rt, ct, ht] = await Promise.all([
     API('/api/templates/ratings'),
     API('/api/templates/comments'),
+    API('/api/hashtags'),
   ]);
   state.ratingTemplates = rt;
   state.commentTemplates = ct;
+  state.hashtagPool = ht;
   showStep(2);
 };
 
@@ -541,11 +803,14 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
   const box = document.createElement('div');
   box.className = 'module-box';
   box.dataset.isDefault = isDefault;
+  box.draggable = !isDefault;
+  if (!isDefault) box.classList.add('module-draggable');
 
   let headerHtml;
   if (isDefault) {
     headerHtml = `
       <div class="module-header">
+        <span class="module-drag-handle module-drag-handle-locked" title="기본 평점은 항상 첫번째에 고정됩니다">🔒</span>
         <span class="module-name-label">⭐ 평점</span>
       </div>`;
   } else {
@@ -556,6 +821,7 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
       .join('');
     headerHtml = `
       <div class="module-header">
+        <span class="module-drag-handle" title="드래그하여 순서 변경">⠿</span>
         <span class="module-name-label">별점명</span>
         <select class="module-name-select rating-name-select">
           <option value="__direct__">직접 입력</option>
@@ -599,7 +865,7 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
 function buildStarInput(value = 0) {
   const stars = [];
   for (let i = 1; i <= 5; i++) {
-    stars.push(`<button type="button" class="star-btn" data-index="${i}" data-half-index="${i - 0.5}">☆</button>`);
+    stars.push(`<button type="button" class="star-btn" data-index="${i}" data-half-index="${i - 0.5}"><span class="star-disp"><span class="star-disp-bg">★</span><span class="star-disp-fg">★</span></span></button>`);
   }
   return `
     <div class="star-rating-input">
@@ -644,22 +910,72 @@ function updateStarDisplay(box, value) {
   btns.forEach((btn, i) => {
     const full = i + 1;
     const half = i + 0.5;
+    const fg = btn.querySelector('.star-disp-fg');
     if (value >= full) {
-      btn.textContent = '★';
+      if (fg) fg.style.width = '100%';
       btn.classList.add('filled');
       btn.classList.remove('half-filled');
     } else if (value >= half) {
-      btn.textContent = '⯨';
+      if (fg) fg.style.width = '50%';
       btn.classList.add('half-filled');
       btn.classList.remove('filled');
     } else {
-      btn.textContent = '☆';
+      if (fg) fg.style.width = '0%';
       btn.classList.remove('filled', 'half-filled');
     }
   });
 }
 
 $('add-rating-btn').onclick = () => addRatingModule();
+
+// ── 별점 모듈 드래그 정렬 (기본 평점은 항상 첫번째 자리 고정) ──────
+(function initRatingsDragSort() {
+  const wrap = $('ratings-modules');
+  let dragEl = null;
+
+  function getDragAfterElement(y) {
+    const candidates = [...wrap.querySelectorAll('.module-box.module-draggable:not(.dragging)')];
+    return candidates.reduce((closest, child) => {
+      const rect = child.getBoundingClientRect();
+      const offset = y - rect.top - rect.height / 2;
+      if (offset < 0 && offset > closest.offset) {
+        return { offset, element: child };
+      }
+      return closest;
+    }, { offset: Number.NEGATIVE_INFINITY, element: null }).element;
+  }
+
+  wrap.addEventListener('dragstart', e => {
+    const box = e.target.closest('.module-box');
+    if (!box || box.dataset.isDefault === 'true') { e.preventDefault(); return; }
+    dragEl = box;
+    requestAnimationFrame(() => box.classList.add('dragging'));
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', '');
+  });
+
+  wrap.addEventListener('dragend', () => {
+    if (dragEl) dragEl.classList.remove('dragging');
+    dragEl = null;
+  });
+
+  wrap.addEventListener('dragover', e => {
+    if (!dragEl) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const defaultBox = wrap.querySelector('.module-box[data-is-default="true"]');
+    const afterEl = getDragAfterElement(e.clientY);
+    if (afterEl == null) {
+      wrap.appendChild(dragEl);
+    } else {
+      wrap.insertBefore(dragEl, afterEl);
+    }
+    // 안전장치: 기본 평점 모듈은 항상 첫번째 자리 유지
+    if (defaultBox && wrap.firstElementChild !== defaultBox) {
+      wrap.insertBefore(defaultBox, wrap.firstElementChild);
+    }
+  });
+})();
 
 // ══════════════════════════════════════════════════════════════
 // COMMENT MODULES
@@ -821,6 +1137,7 @@ async function submitEntry() {
     watch_status: watchStatus,
     ratings,
     comments,
+    hashtags: state.selectedHashtags.slice(),
   };
 
   let result;
@@ -853,10 +1170,7 @@ async function editEntry(entryId) {
 }
 
 // ── Back button ─────────────────────────────────────────────────
-$('register-back-btn').onclick = () => {
-  if (state.registerType === 'review') navigateTo('review');
-  else navigateTo('watchlist');
-};
+$('register-back-btn').onclick = () => history.back();
 
 // ══════════════════════════════════════════════════════════════
 // GNB & FABs
@@ -961,4 +1275,7 @@ function escAttr(s) { return escHtml(s); }
 // ══════════════════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════════════════
+// 초기 진입 시 현재 히스토리 항목에 'home' 상태를 부여 (앱 내 이동마다 새 항목이
+// 쌓이므로, 뒤로가기를 누르면 이 항목으로 돌아오기 전까지는 앱을 벗어나지 않음)
+history.replaceState({ view: 'page', page: 'home' }, '', '');
 loadHome(true);

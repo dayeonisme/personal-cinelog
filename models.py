@@ -19,6 +19,7 @@ class Movie(db.Model):
     poster_url = db.Column(db.String(1000))
     genre = db.Column(db.String(500))
     runtime = db.Column(db.String(50))
+    country = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     entries = db.relationship('Entry', backref='movie', lazy=True, cascade='all, delete-orphan')
@@ -47,7 +48,26 @@ class Movie(db.Model):
             'poster_url': self.poster_url,
             'genre': self.genre,
             'runtime': self.runtime,
+            'country': self.country,
         }
+
+
+entry_hashtags = db.Table(
+    'entry_hashtags',
+    db.Column('entry_id', db.Integer, db.ForeignKey('entries.id'), primary_key=True),
+    db.Column('hashtag_id', db.Integer, db.ForeignKey('hashtags.id'), primary_key=True),
+)
+
+
+class Hashtag(db.Model):
+    """평가/보고싶어요 공용 해시태그 (등록순으로 노출)"""
+    __tablename__ = 'hashtags'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {'id': self.id, 'name': self.name}
 
 
 class Entry(db.Model):
@@ -64,6 +84,8 @@ class Entry(db.Model):
                               cascade='all, delete-orphan', order_by='RatingModule.order')
     comments = db.relationship('CommentModule', backref='entry', lazy=True,
                                cascade='all, delete-orphan', order_by='CommentModule.order')
+    hashtags = db.relationship('Hashtag', secondary=entry_hashtags, lazy='subquery',
+                               order_by='Hashtag.id')
 
     def watchlist_kind(self):
         if self.entry_type != 'watchlist':
@@ -88,6 +110,7 @@ class Entry(db.Model):
             'updated_at': self.updated_at.isoformat(),
             'ratings': [r.to_dict() for r in self.ratings],
             'comments': [c.to_dict() for c in self.comments],
+            'hashtags': [h.to_dict() for h in self.hashtags],
         }
 
 

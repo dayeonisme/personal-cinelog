@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
 from database import db
-from models import Movie, Entry, RatingModule, CommentModule, RatingTemplate, CommentTemplate
+from models import Movie, Entry, RatingModule, CommentModule, RatingTemplate, CommentTemplate, Hashtag
 from werkzeug.utils import secure_filename
 
 # ── Config ──────────────────────────────────────────────────────────────────
@@ -54,6 +54,7 @@ def ensure_movie_schema():
         'title_en': "ALTER TABLE movies ADD COLUMN title_en VARCHAR(500)",
         'director_ko': "ALTER TABLE movies ADD COLUMN director_ko VARCHAR(500)",
         'director_en': "ALTER TABLE movies ADD COLUMN director_en VARCHAR(500)",
+        'country': "ALTER TABLE movies ADD COLUMN country VARCHAR(200)",
     }
     for column, statement in migrations.items():
         if column not in columns:
@@ -98,6 +99,24 @@ def _release_year(release_date):
     return release_date[:4] if release_date else None
 
 
+def _resolve_hashtags(names):
+    """이름 목록을 받아 Hashtag 레코드 목록(등록순 유지, 신규는 생성)으로 변환"""
+    tags = []
+    seen = set()
+    for raw in names or []:
+        name = (raw or '').strip().lstrip('#').strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        tag = Hashtag.query.filter_by(name=name).first()
+        if not tag:
+            tag = Hashtag(name=name)
+            db.session.add(tag)
+            db.session.flush()
+        tags.append(tag)
+    return tags
+
+
 def _tmdb_search_result_to_movie(item):
     tmdb_id = item.get('id')
     title_ko = item.get('title') or item.get('original_title') or ''
@@ -125,6 +144,7 @@ def _tmdb_detail_to_movie(data):
     actors = [p.get('name') for p in cast[:5] if p.get('name')]
     genres = [g.get('name') for g in data.get('genres', []) if g.get('name')]
     runtime = data.get('runtime')
+    countries = [c.get('name') for c in data.get('production_countries', []) if c.get('name')]
     external_ids = data.get('external_ids') or {}
 
     title_ko = data.get('title') or data.get('original_title') or ''
@@ -147,7 +167,8 @@ def _tmdb_detail_to_movie(data):
         'plot': data.get('overview'),
         'poster_url': _tmdb_poster_url(data.get('poster_path')),
         'genre': ', '.join(genres),
-        'runtime': f'{runtime} min' if runtime else None,
+        'runtime': str(runtime) if runtime else None,
+        'country': ', '.join(countries) or None,
     }
 
 
@@ -307,16 +328,30 @@ def create_entry():
     movie_data = data.get('movie', {})
     entry_type = data.get('entry_type', 'review')
 
-    # Upsert movie
-    movie = Movie.query.filter_by(imdb_id=movie_data.get('imdb_id')).first() if movie_data.get('imdb_id') else None
+    # Upsert movie — imdb_id로 우선 매칭하고, 못 찾으면 tmdb_id로도 매칭한다.
+    # (왓챠 마이그레이션 데이터는 imdb_id에 'watcha:...' 형식을 쓰고, 직접 검색해
+    #  등록할 때는 'tmdb:...' 형식을 쓰는 등 같은 영화라도 imdb_id 표기가 달라질 수
+    #  있어 이것만으로 매칭하면 동일 영화가 중복 생성될 수 있다. tmdb_id는 두 경로
+    #  모두에서 동일하게 채워지므로 보조 매칭 키로 사용한다.)
+    incoming_imdb_id = movie_data.get('imdb_id')
+    incoming_tmdb_id = movie_data.get('tmdb_id') or (
+        incoming_imdb_id.split(':', 1)[1]
+        if incoming_imdb_id and incoming_imdb_id.startswith('tmdb:')
+        else None
+    )
+    if incoming_tmdb_id is not None:
+        incoming_tmdb_id = str(incoming_tmdb_id)
+
+    movie = None
+    if incoming_imdb_id:
+        movie = Movie.query.filter_by(imdb_id=incoming_imdb_id).first()
+    if not movie and incoming_tmdb_id:
+        movie = Movie.query.filter_by(tmdb_id=incoming_tmdb_id).first()
+
     if not movie:
         movie = Movie(
-            imdb_id=movie_data.get('imdb_id'),
-            tmdb_id=movie_data.get('tmdb_id') or (
-                movie_data.get('imdb_id', '').split(':', 1)[1]
-                if movie_data.get('imdb_id', '').startswith('tmdb:')
-                else None
-            ),
+            imdb_id=incoming_imdb_id,
+            tmdb_id=incoming_tmdb_id,
             title=movie_data.get('title', ''),
             title_ko=movie_data.get('title_ko') or movie_data.get('title', ''),
             title_en=movie_data.get('title_en') or movie_data.get('title', ''),
@@ -329,6 +364,7 @@ def create_entry():
             poster_url=movie_data.get('poster_url'),
             genre=movie_data.get('genre'),
             runtime=movie_data.get('runtime'),
+            country=movie_data.get('country'),
         )
         db.session.add(movie)
         db.session.flush()
@@ -340,6 +376,8 @@ def create_entry():
     )
     db.session.add(entry)
     db.session.flush()
+
+    entry.hashtags = _resolve_hashtags(data.get('hashtags', []))
 
     # Ratings
     for i, r in enumerate(data.get('ratings', [])):
@@ -388,6 +426,9 @@ def update_entry(entry_id):
     entry.watch_status = data.get('watch_status', entry.watch_status)
     entry.updated_at = datetime.utcnow()
 
+    if 'hashtags' in data:
+        entry.hashtags = _resolve_hashtags(data.get('hashtags', []))
+
     # Replace ratings
     if 'ratings' in data:
         RatingModule.query.filter_by(entry_id=entry.id).delete()
@@ -430,6 +471,27 @@ def delete_entry(entry_id):
     db.session.delete(entry)
     db.session.commit()
     return jsonify({'ok': True})
+
+
+# ── Hashtags ──────────────────────────────────────────────────────────────────
+@app.route('/api/hashtags')
+def list_hashtags():
+    tags = Hashtag.query.order_by(Hashtag.id.asc()).all()
+    return jsonify([t.to_dict() for t in tags])
+
+
+# ── Movie Detail Page ─────────────────────────────────────────────────────────
+@app.route('/api/movies/<int:movie_id>')
+def get_movie(movie_id):
+    movie = Movie.query.get_or_404(movie_id)
+    lang = request.args.get('lang', 'ko')
+    review = Entry.query.filter_by(movie_id=movie.id, entry_type='review').order_by(Entry.created_at.desc()).first()
+    watchlist = Entry.query.filter_by(movie_id=movie.id, entry_type='watchlist').order_by(Entry.created_at.desc()).first()
+    return jsonify({
+        'movie': movie.to_dict(lang=lang),
+        'review': review.to_dict(lang=lang) if review else None,
+        'watchlist': watchlist.to_dict(lang=lang) if watchlist else None,
+    })
 
 
 # ── Image Upload ──────────────────────────────────────────────────────────────
