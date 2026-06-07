@@ -71,7 +71,7 @@ img { display: block; }
   font-family: var(--font-display);
   font-style: italic;
   font-weight: 500;
-  font-size: 52px;
+  font-size: 42px;
   letter-spacing: 0.01em;
   color: var(--accent);
   line-height: 1;
@@ -138,7 +138,7 @@ img { display: block; }
 
 .gnb-btn span {
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 8px;
   color: var(--text-muted);
   letter-spacing: 0.05em;
   transition: color 0.18s;
@@ -462,12 +462,12 @@ img { display: block; }
 .kebab-menu button.danger:hover { color: #c06060; }
 
 /* Hashtags */
-.hashtag-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
-.hashtag-chip {
-  font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.03em;
-  color: var(--accent); border: 1px solid var(--border-gold);
-  padding: 3px 10px; background: rgba(138,115,64,.08);
+.hashtag-line {
+  margin-bottom: 14px;
+  font-family: var(--font-mono); font-size: 15px; font-weight: 400; letter-spacing: 0.03em;
+  color: #a78bfa; word-break: break-all;
 }
+.hashtag-line strong, .hashtag-line b { font-weight: 400; }
 
 /* Hashtag editor (register page) */
 .hashtag-editor { display: flex; flex-direction: column; gap: 12px; }
@@ -518,6 +518,13 @@ img { display: block; }
 }
 .star-disp-bg { color: var(--border); width: 100%; }
 .star-disp-fg { color: var(--accent); width: 0; }
+/* 0.5점 반채움 별이 꽉 찬 별과 구분되도록 가운데에 얇은 구분선을 표시 */
+.star-disp-half::after {
+  content: '';
+  position: absolute; top: 6%; left: 50%; width: 1px; height: 88%;
+  background: var(--bg-card);
+  z-index: 1;
+}
 
 /* Comments */
 .comment-modules { display: flex; flex-direction: column; gap: 14px; }

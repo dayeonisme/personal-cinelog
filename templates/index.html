@@ -61,6 +61,7 @@
           <option value="title">영화명</option>
           <option value="director">감독명</option>
           <option value="actor">배우명</option>
+          <option value="hashtag">해시태그</option>
         </select>
         <input id="home-search-input" type="text" placeholder="검색어를 입력하세요..." class="search-input">
         <button id="home-search-btn" class="search-btn">
@@ -97,6 +98,7 @@
           <option value="title">영화명</option>
           <option value="rating_name">별점명</option>
           <option value="comment_name">코멘트명</option>
+          <option value="hashtag">해시태그</option>
         </select>
         <input id="review-search-input" type="text" placeholder="검색어를 입력하세요..." class="search-input">
         <button id="review-search-btn" class="search-btn">
@@ -137,6 +139,7 @@
           <option value="actor">배우명</option>
           <option value="title">영화명</option>
           <option value="comment_name">코멘트명</option>
+          <option value="hashtag">해시태그</option>
         </select>
         <input id="watchlist-search-input" type="text" placeholder="검색어를 입력하세요..." class="search-input">
         <button id="watchlist-search-btn" class="search-btn">
@@ -229,6 +232,17 @@
         </div>
       </div>
 
+      <div class="form-section">
+        <h3 class="step-title">해시태그</h3>
+        <div class="hashtag-editor">
+          <div class="hashtag-chips" id="hashtag-chips"></div>
+          <div class="hashtag-input-wrap">
+            <input type="text" id="hashtag-input" class="hashtag-input" placeholder="해시태그를 입력하고 Enter (과거 등록한 태그는 자동완성)" autocomplete="off">
+            <div class="hashtag-dropdown" id="hashtag-dropdown" style="display:none"></div>
+          </div>
+        </div>
+      </div>
+
       <div id="ratings-section" class="form-section">
         <h3 class="step-title">별점</h3>
         <div id="ratings-modules"></div>
@@ -239,17 +253,6 @@
         <h3 class="step-title">코멘트</h3>
         <div id="comments-modules"></div>
         <button class="add-module-btn" id="add-comment-btn">+ 코멘트 추가</button>
-      </div>
-
-      <div class="form-section">
-        <h3 class="step-title">해시태그</h3>
-        <div class="hashtag-editor">
-          <div class="hashtag-chips" id="hashtag-chips"></div>
-          <div class="hashtag-input-wrap">
-            <input type="text" id="hashtag-input" class="hashtag-input" placeholder="해시태그를 입력하고 Enter (과거 등록한 태그는 자동완성)" autocomplete="off">
-            <div class="hashtag-dropdown" id="hashtag-dropdown" style="display:none"></div>
-          </div>
-        </div>
       </div>
 
       <div class="register-actions">

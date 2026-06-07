@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import requests
 from datetime import datetime
@@ -104,7 +105,8 @@ def _resolve_hashtags(names):
     tags = []
     seen = set()
     for raw in names or []:
-        name = (raw or '').strip().lstrip('#').strip()
+        # 해시태그는 공백을 포함할 수 없음 — 모든 공백 문자를 제거
+        name = re.sub(r'\s+', '', (raw or '').strip().lstrip('#'))
         if not name or name in seen:
             continue
         seen.add(name)
@@ -289,6 +291,8 @@ def list_entries():
             q = q.join(RatingModule).filter(RatingModule.name.ilike(f'%{search}%'))
         elif search_field == 'comment_name':
             q = q.join(CommentModule).filter(CommentModule.name.ilike(f'%{search}%'))
+        elif search_field == 'hashtag':
+            q = q.join(Entry.hashtags).filter(Hashtag.name.ilike(f'%{search}%'))
         else:  # all
             from sqlalchemy import or_
             q = q.filter(or_(
