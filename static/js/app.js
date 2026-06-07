@@ -46,9 +46,10 @@ function renderStarsHtml(value, max = 5) {
   let html = '';
   for (let i = 1; i <= max; i++) {
     let pct = 0;
+    let halfCls = '';
     if (value >= i) pct = 100;
-    else if (value >= i - 0.5) pct = 50;
-    html += `<span class="star-disp"><span class="star-disp-bg">★</span><span class="star-disp-fg" style="width:${pct}%">★</span></span>`;
+    else if (value >= i - 0.5) { pct = 50; halfCls = ' star-disp-half'; }
+    html += `<span class="star-disp${halfCls}"><span class="star-disp-bg">★</span><span class="star-disp-fg" style="width:${pct}%">★</span></span>`;
   }
   return html;
 }
@@ -109,7 +110,7 @@ function buildCommentsHtml(comments) {
 
 function buildHashtagsHtml(hashtags) {
   if (!hashtags || hashtags.length === 0) return '';
-  return `<div class="hashtag-row">${hashtags.map(h => `<span class="hashtag-chip">#${escHtml(h.name)}</span>`).join('')}</div>`;
+  return `<div class="hashtag-line">${hashtags.map(h => `#${escHtml(h.name)}`).join(' ')}</div>`;
 }
 
 function showModal(id) { $(id).style.display = 'flex'; }
@@ -362,8 +363,8 @@ function buildEntryCard(entry) {
               ${watchlistBadge}
             </div>
           </div>
-          ${ratingsHtml}
           ${hashtagsHtml}
+          ${ratingsHtml}
           ${commentsHtml}
         </div>
       </div>
@@ -503,8 +504,8 @@ function buildMovieDetailEntrySection(kind, title, entry) {
         <h2 class="movie-detail-section-title">${escHtml(title)} ${badge}</h2>
         <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
       </div>
-      ${ratingsHtml}
       ${hashtagsHtml}
+      ${ratingsHtml}
       ${commentsHtml}
     </div>`;
 }
@@ -649,7 +650,7 @@ function renderHashtagChips() {
 }
 
 function addHashtag(rawName) {
-  const name = (rawName || '').trim().replace(/^#/, '');
+  const name = (rawName || '').trim().replace(/^#/, '').replace(/\s+/g, '');
   if (!name) return;
   if (!state.selectedHashtags.includes(name)) {
     state.selectedHashtags.push(name);
@@ -685,13 +686,20 @@ function showHashtagDropdown(query) {
 }
 
 $('hashtag-input').addEventListener('focus', () => showHashtagDropdown($('hashtag-input').value));
-$('hashtag-input').addEventListener('input', () => showHashtagDropdown($('hashtag-input').value));
+$('hashtag-input').addEventListener('input', () => {
+  const input = $('hashtag-input');
+  // 해시태그는 공백 없이만 등록 가능 — 입력 중 공백은 즉시 제거
+  if (/\s/.test(input.value)) input.value = input.value.replace(/\s+/g, '');
+  showHashtagDropdown(input.value);
+});
 $('hashtag-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') {
     e.preventDefault();
     addHashtag($('hashtag-input').value);
   } else if (e.key === 'Escape') {
     hideHashtagDropdown();
+  } else if (e.key === ' ') {
+    e.preventDefault();
   }
 });
 document.addEventListener('click', e => {
@@ -911,17 +919,21 @@ function updateStarDisplay(box, value) {
     const full = i + 1;
     const half = i + 0.5;
     const fg = btn.querySelector('.star-disp-fg');
+    const disp = btn.querySelector('.star-disp');
     if (value >= full) {
       if (fg) fg.style.width = '100%';
       btn.classList.add('filled');
       btn.classList.remove('half-filled');
+      if (disp) disp.classList.remove('star-disp-half');
     } else if (value >= half) {
       if (fg) fg.style.width = '50%';
       btn.classList.add('half-filled');
       btn.classList.remove('filled');
+      if (disp) disp.classList.add('star-disp-half');
     } else {
       if (fg) fg.style.width = '0%';
       btn.classList.remove('filled', 'half-filled');
+      if (disp) disp.classList.remove('star-disp-half');
     }
   });
 }
