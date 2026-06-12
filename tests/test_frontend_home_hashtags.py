@@ -88,3 +88,49 @@ def test_registration_entrypoint_is_home_fab_with_type_choice():
     assert 'data-register-type="watchlist"' in template
     assert "$('home-fab').onclick = () => openRegisterPage(null);" in script
     assert "function chooseRegisterType(type)" in script
+
+
+def test_gnb_logo_is_home_entrypoint_without_home_nav_button():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+
+    assert 'id="gnb-home-btn"' in template
+    assert 'data-page="home"' not in template
+    assert "$('gnb-home-btn').onclick = () => navigateTo('home');" in script
+    assert ".gnb-btn span" in css
+    assert "font-size: 16px;" in css
+
+
+def test_list_page_titles_are_not_rendered():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+
+    assert '<h1 class="page-title">홈</h1>' not in template
+    assert '<h1 class="page-title">평가</h1>' not in template
+    assert '<h1 class="page-title">보고싶어요</h1>' not in template
+
+
+def test_watcha_pedia_button_renders_below_movie_metadata():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    detail_start = script.index("function renderMovieDetail(data)")
+    detail_end = script.index("function buildMovieDetailEmptySection", detail_start)
+    render_movie_detail = script[detail_start:detail_end]
+    title_row_start = render_movie_detail.index('<div class="movie-detail-title-row">')
+    title_row_end = render_movie_detail.index('</div>', title_row_start)
+    title_row = render_movie_detail[title_row_start:title_row_end]
+
+    assert "watcha-pedia-btn" in render_movie_detail
+    assert "${watchaPediaBtn}" not in title_row
+    assert render_movie_detail.index("${metaHtml}") < render_movie_detail.index("movie-detail-actions")
+
+
+def test_rating_display_uses_module_emoji_and_clipped_half_symbol():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+
+    assert "function renderStarsHtml(value, emoji = '⭐', max = 5)" in script
+    assert "const safeEmoji = escHtml(emoji || '⭐');" in script
+    assert "renderStarsHtml(r.value || 0, emoji)" in script
+    assert "star-disp-symbol" in script
+    assert ".star-disp-symbol" in css
+    assert ".star-disp-half::after" not in css

@@ -42,15 +42,16 @@ const API = async (path, opts = {}) => {
 const $ = id => document.getElementById(id);
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
 
-// 레이어 방식으로 별을 그려 0.5점 단위 반채움을 정확히 표현 (깨진 이모지 문제 해결)
-function renderStarsHtml(value, max = 5) {
+// 레이어 방식으로 별점 이모지를 그려 0.5점 단위 반채움을 정확히 표현
+function renderStarsHtml(value, emoji = '⭐', max = 5) {
+  const safeEmoji = escHtml(emoji || '⭐');
   let html = '';
   for (let i = 1; i <= max; i++) {
     let pct = 0;
-    let halfCls = '';
+    const halfCls = value >= i - 0.5 && value < i ? ' star-disp-half' : '';
     if (value >= i) pct = 100;
-    else if (value >= i - 0.5) { pct = 50; halfCls = ' star-disp-half'; }
-    html += `<span class="star-disp${halfCls}"><span class="star-disp-bg">★</span><span class="star-disp-fg" style="width:${pct}%">★</span></span>`;
+    else if (value >= i - 0.5) pct = 50;
+    html += `<span class="star-disp${halfCls}"><span class="star-disp-bg"><span class="star-disp-symbol">${safeEmoji}</span></span><span class="star-disp-fg" style="width:${pct}%"><span class="star-disp-symbol">${safeEmoji}</span></span></span>`;
   }
   return html;
 }
@@ -81,9 +82,10 @@ function displayRatingName(name) {
 function buildRatingsHtml(ratings) {
   if (!ratings || ratings.length === 0) return '';
   const chips = ratings.map(r => {
-    const stars = renderStarsHtml(r.value || 0);
+    const emoji = r.emoji || '⭐';
+    const stars = renderStarsHtml(r.value || 0, emoji);
     return `<div class="rating-chip">
-      <span class="rating-chip-name">${r.emoji || '⭐'} ${escHtml(displayRatingName(r.name))}</span>
+      <span class="rating-chip-name">${escHtml(emoji)} ${escHtml(displayRatingName(r.name))}</span>
       <span class="rating-chip-stars">${stars}</span>
       <span class="rating-chip-value">${r.value != null ? r.value.toFixed(1) : '–'}</span>
     </div>`;
@@ -490,7 +492,7 @@ function renderMovieDetail(data) {
   if (m.imdb_id && m.imdb_id.startsWith('watcha:')) {
     const watchaId = m.imdb_id.split(':')[1];
     const watchaUrl = `https://pedia.watcha.com/ko/contents/${watchaId}`;
-    watchaPediaBtn = `<a class="watcha-pedia-btn" href="${watchaUrl}" target="_blank" rel="noopener" title="왓챠피디아에서 보기"><img src="/static/images/watcha-logo.svg" alt="왓챠피디아"></a>`;
+    watchaPediaBtn = `<a class="watcha-pedia-btn" href="${watchaUrl}" target="_blank" rel="noopener" title="왓챠피디아에서 보기"><img src="/static/images/watcha-logo.svg" alt=""><span>왓챠피디아</span></a>`;
   }
 
   $('movie-detail-content').innerHTML = `
@@ -499,10 +501,10 @@ function renderMovieDetail(data) {
       <div class="movie-detail-info">
         <div class="movie-detail-title-row">
           <h1 class="movie-detail-title">${escHtml(m.title)} ${year}</h1>
-          ${watchaPediaBtn}
         </div>
         ${director ? `<div class="movie-detail-director">감독 · ${escHtml(director)}</div>` : ''}
         ${metaHtml}
+        ${watchaPediaBtn ? `<div class="movie-detail-actions">${watchaPediaBtn}</div>` : ''}
       </div>
     </div>
     ${watchlistSection}
@@ -916,7 +918,7 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
       </div>`;
   }
 
-  const starHtml = buildStarInput(value);
+  const starHtml = buildStarInput(value, emoji);
   box.innerHTML = `${headerHtml}${starHtml}`;
 
   if (!isDefault) {
@@ -931,11 +933,13 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
           const opt = sel.options[sel.selectedIndex];
           nameInput.value = sel.value;
           emojiInput.value = opt.dataset.emoji || '⭐';
+          updateRatingEmojiInBox(box, emojiInput.value);
         } else {
           nameInput.value = '';
         }
       });
     }
+    emojiInput?.addEventListener('input', () => updateRatingEmojiInBox(box, emojiInput.value));
   }
 
   // Init star interaction
@@ -945,10 +949,11 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
   return box;
 }
 
-function buildStarInput(value = 0) {
+function buildStarInput(value = 0, emoji = '⭐') {
+  const safeEmoji = escHtml(emoji || '⭐');
   const stars = [];
   for (let i = 1; i <= 5; i++) {
-    stars.push(`<button type="button" class="star-btn" data-index="${i}" data-half-index="${i - 0.5}"><span class="star-disp"><span class="star-disp-bg">★</span><span class="star-disp-fg">★</span></span></button>`);
+    stars.push(`<button type="button" class="star-btn" data-index="${i}" data-half-index="${i - 0.5}"><span class="star-disp"><span class="star-disp-bg"><span class="star-disp-symbol">${safeEmoji}</span></span><span class="star-disp-fg"><span class="star-disp-symbol">${safeEmoji}</span></span></span></button>`);
   }
   return `
     <div class="star-rating-input">
@@ -956,6 +961,12 @@ function buildStarInput(value = 0) {
       <span class="star-value-display">${value.toFixed(1)}</span>
       <input type="hidden" class="star-rating-hidden" value="${value}">
     </div>`;
+}
+
+function updateRatingEmojiInBox(box, emoji = '⭐') {
+  box.querySelectorAll('.star-disp-symbol').forEach(symbol => {
+    symbol.textContent = emoji || '⭐';
+  });
 }
 
 function initStarInteraction(box) {
@@ -1284,6 +1295,7 @@ document.querySelectorAll('.gnb-btn').forEach(btn => {
   };
 });
 
+$('gnb-home-btn').onclick = () => navigateTo('home');
 $('home-fab').onclick = () => openRegisterPage(null);
 
 function refreshCurrentPage() {
