@@ -499,7 +499,7 @@ function renderMovieDetail(data) {
   if (m.imdb_id && m.imdb_id.startsWith('watcha:')) {
     const watchaId = m.imdb_id.split(':')[1];
     const watchaUrl = `https://pedia.watcha.com/ko/contents/${watchaId}`;
-    watchaPediaBtn = `<a class="watcha-pedia-btn" href="${watchaUrl}" target="_blank" rel="noopener" title="왓챠피디아에서 보기"><img src="/static/images/watcha-logo.svg" alt=""><span>왓챠피디아</span></a>`;
+    watchaPediaBtn = `<a class="watcha-pedia-btn" href="${watchaUrl}" target="_blank" rel="noopener" title="왓챠피디아에서 보기"><img src="/static/images/watcha-logo.svg" alt="왓챠피디아"></a>`;
   }
 
   $('movie-detail-content').innerHTML = `
