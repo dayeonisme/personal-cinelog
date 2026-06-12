@@ -126,6 +126,10 @@ function collectEntryHashtags(...entries) {
   return tags;
 }
 
+function primaryEntryHashtags(data) {
+  return data.review?.hashtags || data.watchlist?.hashtags || [];
+}
+
 function showModal(id) { $(id).style.display = 'flex'; }
 function hideModal(id) { $(id).style.display = 'none'; }
 
@@ -454,7 +458,7 @@ function renderMovieDetail(data) {
   const m = data.movie;
   const year = m.year ? `(${m.year})` : '';
   const director = m.director && m.director !== 'N/A' ? m.director : '';
-  const movieHashtags = collectEntryHashtags(data.review, data.watchlist);
+  const movieHashtags = primaryEntryHashtags(data);
 
   const poster = m.poster_url
     ? `<img class="movie-detail-poster" src="${m.poster_url}" alt="${escHtml(m.title)}">`
@@ -1019,9 +1023,24 @@ $('add-rating-btn').onclick = () => addRatingModule();
 // COMMENT MODULES
 // ══════════════════════════════════════════════════════════════
 
+function defaultCommentNameForType(type) {
+  return type === 'watchlist' ? '보고싶은 이유' : '감상평';
+}
+
+function defaultCommentPlaceholderForType(type) {
+  return type === 'watchlist'
+    ? '보고싶은 이유를 작성하세요... (마크다운 지원)'
+    : '감상평을 작성하세요... (마크다운 지원)';
+}
+
 function addDefaultCommentModule() {
   const wrap = $('comments-modules');
-  const box = buildCommentModuleBox({ name: '감상평', content: '', isDefault: true });
+  const box = buildCommentModuleBox({
+    name: defaultCommentNameForType(state.registerType),
+    content: '',
+    isDefault: true,
+    placeholder: defaultCommentPlaceholderForType(state.registerType),
+  });
   wrap.appendChild(box);
 }
 
@@ -1031,7 +1050,7 @@ function addCommentModule(opts = {}) {
   wrap.appendChild(box);
 }
 
-function buildCommentModuleBox({ name = '', content = '', images = [], isDefault = false }) {
+function buildCommentModuleBox({ name = '', content = '', images = [], isDefault = false, placeholder = '' }) {
   const box = document.createElement('div');
   box.className = 'module-box';
   box.dataset.isDefault = isDefault;
@@ -1041,11 +1060,11 @@ function buildCommentModuleBox({ name = '', content = '', images = [], isDefault
   if (isDefault) {
     headerHtml = `
       <div class="module-header">
-        <span class="module-name-label">📝 감상평</span>
+        <span class="module-name-label">📝 ${escHtml(name || defaultCommentNameForType(state.registerType))}</span>
       </div>`;
   } else {
     const templateOpts = state.commentTemplates
-      .filter(t => t.name !== '감상평')
+      .filter(t => t.name !== '감상평' && t.name !== '보고싶은 이유')
       .map(t => `<option value="${escAttr(t.name)}">${escHtml(t.name)}</option>`)
       .join('');
     headerHtml = `
@@ -1068,7 +1087,7 @@ function buildCommentModuleBox({ name = '', content = '', images = [], isDefault
     </div>`).join('');
 
   box.innerHTML = `${headerHtml}
-    <textarea class="comment-textarea" placeholder="${isDefault ? '감상평을 작성하세요... (마크다운 지원)' : '내용을 입력하세요...'}">${escHtml(content)}</textarea>
+    <textarea class="comment-textarea" placeholder="${escAttr(isDefault ? (placeholder || defaultCommentPlaceholderForType(state.registerType)) : '내용을 입력하세요...')}">${escHtml(content)}</textarea>
     <div class="comment-image-section">
       <div class="comment-image-label">이미지</div>
       <div class="comment-image-previews">${imgPreviews}</div>
@@ -1157,10 +1176,10 @@ async function submitEntry() {
   const comments = [];
   document.querySelectorAll('#comments-modules .module-box').forEach((box, i) => {
     const isDefault = box.dataset.isDefault === 'true';
-    const name = isDefault ? '감상평' : (box.querySelector('.comment-name-input')?.value || '').trim();
+    const name = isDefault ? defaultCommentNameForType(type) : (box.querySelector('.comment-name-input')?.value || '').trim();
     if (!name && !isDefault) return;
     // Validate reserved names for custom modules
-    if (!isDefault && (name === '평점' || name === '감상평')) {
+    if (!isDefault && (name === '평점' || name === '감상평' || name === '보고싶은 이유')) {
       showModal('modal-name-error');
       return;
     }

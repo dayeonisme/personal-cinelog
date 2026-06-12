@@ -119,6 +119,14 @@ def _resolve_hashtags(names):
     return tags
 
 
+def _default_comment_name(entry_type):
+    return '보고싶은 이유' if entry_type == 'watchlist' else '감상평'
+
+
+def _comment_name(raw_comment, entry_type):
+    return raw_comment.get('name') or _default_comment_name(entry_type)
+
+
 def _tmdb_search_result_to_movie(item):
     tmdb_id = item.get('id')
     title_ko = item.get('title') or item.get('original_title') or ''
@@ -402,7 +410,7 @@ def create_entry():
     for i, c in enumerate(data.get('comments', [])):
         cm = CommentModule(
             entry_id=entry.id,
-            name=c.get('name', '감상평'),
+            name=_comment_name(c, entry_type),
             content=c.get('content', ''),
             images=json.dumps(c.get('images', [])),
             is_default=c.get('is_default', False),
@@ -455,7 +463,7 @@ def update_entry(entry_id):
         for i, c in enumerate(data['comments']):
             cm = CommentModule(
                 entry_id=entry.id,
-                name=c.get('name', '감상평'),
+                name=_comment_name(c, entry.entry_type),
                 content=c.get('content', ''),
                 images=json.dumps(c.get('images', [])),
                 is_default=c.get('is_default', False),
