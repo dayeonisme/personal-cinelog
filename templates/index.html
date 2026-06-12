@@ -84,6 +84,7 @@
     </div>
     <div id="home-grid" class="movie-grid"></div>
     <div id="home-loading" class="loading-indicator" style="display:none">로딩 중...</div>
+    <button class="fab" id="home-fab" title="영화 등록">+</button>
   </div>
 
   <!-- REVIEW PAGE -->
@@ -125,7 +126,6 @@
     <div id="review-load-more" class="load-more" style="display:none">
       <button onclick="loadMoreReviews()">더 보기</button>
     </div>
-    <button class="fab" id="review-fab" title="평가 등록">+</button>
   </div>
 
   <!-- WATCHLIST PAGE -->
@@ -163,7 +163,6 @@
     <div id="watchlist-load-more" class="load-more" style="display:none">
       <button onclick="loadMoreWatchlist()">더 보기</button>
     </div>
-    <button class="fab" id="watchlist-fab" title="보고싶어요 등록">+</button>
   </div>
 
   <!-- MOVIE DETAIL PAGE -->
@@ -213,6 +212,32 @@
         </div>
       </div>
       <button id="step1-next-btn" class="primary-btn next-btn" disabled>다음 단계 →</button>
+    </div>
+
+    <!-- Type choice -->
+    <div id="step-type" class="register-step">
+      <div class="step-indicator">
+        <span class="step-dot done">✓</span>
+        <span class="step-line active"></span>
+        <span class="step-dot active">2</span>
+        <span class="step-line"></span>
+        <span class="step-dot">3</span>
+      </div>
+      <h3 class="step-title">등록할 내용 선택</h3>
+      <p id="reg-type-selected-title" class="muted"></p>
+      <div class="register-type-choice">
+        <button type="button" class="register-type-card review" data-register-type="review">
+          <span class="register-type-title">평가</span>
+          <span class="register-type-desc">감상 상태, 별점, 감상평을 기록합니다.</span>
+        </button>
+        <button type="button" class="register-type-card watchlist" data-register-type="watchlist">
+          <span class="register-type-title">보고싶어요</span>
+          <span class="register-type-desc">보고싶은 이유와 해시태그를 기록합니다.</span>
+        </button>
+      </div>
+      <div class="register-actions">
+        <button class="ghost-btn" id="type-back-btn">← 이전</button>
+      </div>
     </div>
 
     <!-- Step 2 -->
@@ -286,6 +311,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=20260613-primary-hashtags"></script>
+<script src="/static/js/app.js?v=20260613-register-flow"></script>
 </body>
 </html>
