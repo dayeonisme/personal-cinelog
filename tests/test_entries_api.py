@@ -123,3 +123,35 @@ def test_movie_response_contains_bilingual_display_fields(tmp_path):
     assert movie["title_en"] == "The Host"
     assert movie["director_ko"] == "봉준호"
     assert movie["director_en"] == "Bong Joon Ho"
+
+
+def test_review_default_comment_name_falls_back_to_review_label(tmp_path):
+    configure_test_db(tmp_path)
+
+    response = app.test_client().post(
+        "/api/entries",
+        json={
+            "entry_type": "review",
+            "movie": {"imdb_id": "tmdb:10", "title": "리뷰 영화"},
+            "comments": [{"content": "좋았다", "is_default": True}],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json["comments"][0]["name"] == "감상평"
+
+
+def test_watchlist_default_comment_name_falls_back_to_reason_label(tmp_path):
+    configure_test_db(tmp_path)
+
+    response = app.test_client().post(
+        "/api/entries",
+        json={
+            "entry_type": "watchlist",
+            "movie": {"imdb_id": "tmdb:11", "title": "보고싶은 영화"},
+            "comments": [{"content": "궁금해서", "is_default": True}],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json["comments"][0]["name"] == "보고싶은 이유"
