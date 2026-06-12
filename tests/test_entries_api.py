@@ -155,3 +155,43 @@ def test_watchlist_default_comment_name_falls_back_to_reason_label(tmp_path):
 
     assert response.status_code == 201
     assert response.json["comments"][0]["name"] == "보고싶은 이유"
+
+
+def test_creating_review_removes_existing_watchlist_only_entry_for_same_movie(tmp_path):
+    configure_test_db(tmp_path)
+    client = app.test_client()
+
+    watchlist_response = client.post(
+        "/api/entries",
+        json={
+            "entry_type": "watchlist",
+            "movie": {"imdb_id": "tmdb:12", "title": "전환될 영화"},
+            "comments": [{"content": "보고싶어서", "is_default": True}],
+            "hashtags": ["기대작"],
+        },
+    )
+    assert watchlist_response.status_code == 201
+    movie_id = watchlist_response.json["movie_id"]
+
+    review_response = client.post(
+        "/api/entries",
+        json={
+            "entry_type": "review",
+            "movie": {"imdb_id": "tmdb:12", "title": "전환될 영화"},
+            "watch_status": "completed",
+            "ratings": [
+                {"name": "평점", "emoji": "⭐", "value": 4.0, "is_default": True},
+            ],
+            "comments": [{"content": "봤다", "is_default": True}],
+        },
+    )
+
+    assert review_response.status_code == 201
+    with app.app_context():
+        assert Entry.query.filter_by(movie_id=movie_id, entry_type="review").count() == 1
+        assert Entry.query.filter_by(movie_id=movie_id, entry_type="watchlist").count() == 0
+
+    detail_response = client.get(f"/api/movies/{movie_id}")
+    assert detail_response.status_code == 200
+    assert detail_response.json["review"] is not None
+    assert detail_response.json["watchlist"] is None
