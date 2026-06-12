@@ -127,6 +127,15 @@ def _comment_name(raw_comment, entry_type):
     return raw_comment.get('name') or _default_comment_name(entry_type)
 
 
+def _delete_watchlist_only_entries_before_review(movie_id):
+    existing_review = Entry.query.filter_by(movie_id=movie_id, entry_type='review').first()
+    if existing_review:
+        return
+    watchlist_entries = Entry.query.filter_by(movie_id=movie_id, entry_type='watchlist').all()
+    for watchlist_entry in watchlist_entries:
+        db.session.delete(watchlist_entry)
+
+
 def _tmdb_search_result_to_movie(item):
     tmdb_id = item.get('id')
     title_ko = item.get('title') or item.get('original_title') or ''
@@ -380,6 +389,9 @@ def create_entry():
         )
         db.session.add(movie)
         db.session.flush()
+
+    if entry_type == 'review':
+        _delete_watchlist_only_entries_before_review(movie.id)
 
     entry = Entry(
         movie_id=movie.id,
