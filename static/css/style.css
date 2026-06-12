@@ -122,10 +122,10 @@ img { display: block; }
 /* GNB 버튼 */
 .gnb-btn {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 6px 14px;
   transition: transform 0.18s ease;
 }
 .gnb-btn:hover { transform: scale(1.08); }
@@ -617,18 +617,14 @@ img { display: block; }
   margin-top: 12px;
 }
 .watcha-pedia-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  min-height: 32px; padding: 5px 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  letter-spacing: 0.04em;
-  transition: border-color 0.15s, color 0.15s, transform 0.15s;
+  flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; border-radius: 50%;
+  overflow: hidden;
+  transition: opacity 0.15s, transform 0.15s;
 }
-.watcha-pedia-btn img { width: 22px; height: 22px; display: block; }
-.watcha-pedia-btn:hover { border-color: var(--accent); color: var(--text); transform: translateY(-1px); }
+.watcha-pedia-btn img { width: 100%; height: 100%; display: block; }
+.watcha-pedia-btn:hover { opacity: 0.82; transform: scale(1.07); }
 .movie-detail-director {
   font-family: var(--font-mono); font-size: 16px; color: var(--accent); margin-bottom: 18px; letter-spacing: 0.03em;
 }
