@@ -467,6 +467,12 @@ img { display: block; }
   font-family: var(--font-mono); font-size: 15px; font-weight: 400; letter-spacing: 0.03em;
   color: #a78bfa; word-break: break-all;
 }
+.movie-card-overlay .hashtag-line {
+  margin: 8px 0 0;
+  max-width: 100%;
+  font-size: 12px;
+  line-height: 1.35;
+}
 .hashtag-line strong, .hashtag-line b { font-weight: 400; }
 
 /* Hashtag editor (register page) */
