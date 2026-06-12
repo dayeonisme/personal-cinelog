@@ -238,7 +238,6 @@ function renderHomeGrid() {
     const ratingHtml = rating != null
       ? `<div class="movie-card-overlay-rating">${renderStarsHtml(rating)} ${rating.toFixed(1)}/5.0</div>`
       : '';
-    const hashtagsHtml = buildHashtagsHtml(entry.hashtags);
     return `
       <div class="movie-card ${typeClass}" data-entry-id="${entry.id}" onclick="navigateToMovie(${m.id})">
         ${poster}
@@ -246,7 +245,6 @@ function renderHomeGrid() {
         <div class="movie-card-overlay">
           <div class="movie-card-overlay-title">${escHtml(m.title)} ${year}</div>
           ${director ? `<div class="movie-card-overlay-sub">${escHtml(director)}</div>` : ''}
-          ${hashtagsHtml}
           ${ratingHtml}
         </div>
       </div>`;
