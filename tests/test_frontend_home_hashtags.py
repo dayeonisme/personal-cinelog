@@ -102,6 +102,17 @@ def test_gnb_logo_is_home_entrypoint_without_home_nav_button():
     assert "font-size: 16px;" in css
 
 
+def test_gnb_nav_labels_render_to_the_right_of_icons():
+    css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+    gnb_btn_start = css.index(".gnb-btn {")
+    gnb_btn_end = css.index(".gnb-btn:hover", gnb_btn_start)
+    gnb_btn_css = css[gnb_btn_start:gnb_btn_end]
+
+    assert "display: flex;" in gnb_btn_css
+    assert "flex-direction: row;" in gnb_btn_css
+    assert "align-items: center;" in gnb_btn_css
+
+
 def test_list_page_titles_are_not_rendered():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 
@@ -122,6 +133,22 @@ def test_watcha_pedia_button_renders_below_movie_metadata():
     assert "watcha-pedia-btn" in render_movie_detail
     assert "${watchaPediaBtn}" not in title_row
     assert render_movie_detail.index("${metaHtml}") < render_movie_detail.index("movie-detail-actions")
+
+
+def test_watcha_pedia_button_is_round_logo_icon_without_text_label():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+    watcha_line = next(line for line in script.splitlines() if "watchaPediaBtn =" in line and "watcha-logo.svg" in line)
+    watcha_css_start = css.index(".watcha-pedia-btn {")
+    watcha_css_end = css.index(".watcha-pedia-btn img", watcha_css_start)
+    watcha_css = css[watcha_css_start:watcha_css_end]
+
+    assert '<img src="/static/images/watcha-logo.svg" alt="왓챠피디아">' in watcha_line
+    assert "<span>왓챠피디아</span>" not in watcha_line
+    assert "width: 44px;" in watcha_css
+    assert "height: 44px;" in watcha_css
+    assert "border-radius: 50%;" in watcha_css
+    assert "overflow: hidden;" in watcha_css
 
 
 def test_rating_display_uses_module_emoji_and_clipped_half_symbol():
