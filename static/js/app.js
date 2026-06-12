@@ -113,6 +113,19 @@ function buildHashtagsHtml(hashtags) {
   return `<div class="hashtag-line">${hashtags.map(h => `#${escHtml(h.name)}`).join(' ')}</div>`;
 }
 
+function collectEntryHashtags(...entries) {
+  const tags = [];
+  const seen = new Set();
+  entries.forEach(entry => {
+    (entry?.hashtags || []).forEach(tag => {
+      if (!tag?.name || seen.has(tag.name)) return;
+      seen.add(tag.name);
+      tags.push(tag);
+    });
+  });
+  return tags;
+}
+
 function showModal(id) { $(id).style.display = 'flex'; }
 function hideModal(id) { $(id).style.display = 'none'; }
 
@@ -441,6 +454,7 @@ function renderMovieDetail(data) {
   const m = data.movie;
   const year = m.year ? `(${m.year})` : '';
   const director = m.director && m.director !== 'N/A' ? m.director : '';
+  const movieHashtags = collectEntryHashtags(data.review, data.watchlist);
 
   const poster = m.poster_url
     ? `<img class="movie-detail-poster" src="${m.poster_url}" alt="${escHtml(m.title)}">`
@@ -450,10 +464,11 @@ function renderMovieDetail(data) {
     ['배우', m.actors && m.actors !== 'N/A' ? m.actors : null],
     ['장르', m.genre && m.genre !== 'N/A' ? m.genre : null],
     ['러닝타임', fmtRuntime(m.runtime) || null],
+    ['해시태그', buildHashtagsHtml(movieHashtags)],
     ['국가', m.country && m.country !== 'N/A' ? m.country : null],
   ].filter(([, v]) => v);
   const metaHtml = metaRows.length
-    ? `<dl class="movie-detail-meta-grid">${metaRows.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${escHtml(v)}</dd>`).join('')}</dl>`
+    ? `<dl class="movie-detail-meta-grid">${metaRows.map(([k, v]) => `<dt>${escHtml(k)}</dt><dd>${k === '해시태그' ? v : escHtml(v)}</dd>`).join('')}</dl>`
     : '';
 
   const reviewSection = data.review
@@ -510,14 +525,12 @@ function buildMovieDetailEntrySection(kind, title, entry) {
   }
   const ratingsHtml = isReview ? buildRatingsHtml(entry.ratings) : '';
   const commentsHtml = buildCommentsHtml(entry.comments);
-  const hashtagsHtml = buildHashtagsHtml(entry.hashtags);
   return `
     <div class="movie-detail-section ${kind}">
       <div class="movie-detail-section-header">
         <h2 class="movie-detail-section-title">${escHtml(title)} ${badge}</h2>
         <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
       </div>
-      ${hashtagsHtml}
       ${ratingsHtml}
       ${commentsHtml}
     </div>`;

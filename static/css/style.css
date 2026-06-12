@@ -473,6 +473,9 @@ img { display: block; }
   font-size: 12px;
   line-height: 1.35;
 }
+.movie-detail-meta-grid .hashtag-line {
+  margin: 0;
+}
 .hashtag-line strong, .hashtag-line b { font-weight: 400; }
 
 /* Hashtag editor (register page) */
