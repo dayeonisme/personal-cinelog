@@ -8,9 +8,10 @@
 const state = {
   currentPage: 'home',
   language: 'ko',
-  registerType: 'review',   // 'review' | 'watchlist'
+  registerType: null,   // null | 'review' | 'watchlist'
   editingEntryId: null,
   selectedMovie: null,
+  currentMovieDetail: null,
   pendingDeleteId: null,
   // pagination
   homeEntries: [], homePage: 1, homeTotal: 0,
@@ -455,6 +456,7 @@ async function loadMovieDetail(movieId) {
 }
 
 function renderMovieDetail(data) {
+  state.currentMovieDetail = data;
   const m = data.movie;
   const year = m.year ? `(${m.year})` : '';
   const director = m.director && m.director !== 'N/A' ? m.director : '';
@@ -477,21 +479,11 @@ function renderMovieDetail(data) {
 
   const reviewSection = data.review
     ? buildMovieDetailEntrySection('review', '평가 정보', data.review)
-    : `<div class="movie-detail-section review">
-        <div class="movie-detail-section-header">
-          <h2 class="movie-detail-section-title">평가 정보 <span class="badge">미등록</span></h2>
-        </div>
-        <div class="movie-detail-empty">아직 등록된 평가가 없습니다.</div>
-      </div>`;
+    : buildMovieDetailEmptySection('review', '평가 정보', m);
 
   const watchlistSection = data.watchlist
     ? buildMovieDetailEntrySection('watchlist', '보고싶어요 정보', data.watchlist)
-    : `<div class="movie-detail-section watchlist">
-        <div class="movie-detail-section-header">
-          <h2 class="movie-detail-section-title">보고싶어요 정보 <span class="badge">미등록</span></h2>
-        </div>
-        <div class="movie-detail-empty">아직 등록된 보고싶어요가 없습니다.</div>
-      </div>`;
+    : buildMovieDetailEmptySection('watchlist', '보고싶어요 정보', m);
 
   // 왓챠피디아 링크: imdb_id가 'watcha:XXXXX' 형식인 경우만
   let watchaPediaBtn = '';
@@ -513,9 +505,21 @@ function renderMovieDetail(data) {
         ${metaHtml}
       </div>
     </div>
-    ${reviewSection}
     ${watchlistSection}
+    ${reviewSection}
   `;
+}
+
+function buildMovieDetailEmptySection(kind, title, movie) {
+  const isReview = kind === 'review';
+  return `
+    <div class="movie-detail-section ${kind}">
+      <div class="movie-detail-section-header">
+        <h2 class="movie-detail-section-title">${escHtml(title)} <span class="badge">미등록</span></h2>
+        <button type="button" class="movie-detail-add-btn" onclick="openRegisterForMovie('${kind}')">${isReview ? '평가 추가' : '보고싶어요 추가'}</button>
+      </div>
+      <div class="movie-detail-empty">아직 등록된 ${isReview ? '평가' : '보고싶어요'}가 없습니다.</div>
+    </div>`;
 }
 
 function buildMovieDetailEntrySection(kind, title, entry) {
@@ -540,6 +544,11 @@ function buildMovieDetailEntrySection(kind, title, entry) {
     </div>`;
 }
 
+function openRegisterForMovie(kind, movie = state.currentMovieDetail?.movie) {
+  if (!movie) return;
+  openRegisterPage(kind, null, { movie, fromPageOverride: 'movie' });
+}
+
 // ══════════════════════════════════════════════════════════════
 // REGISTER PAGE
 // ══════════════════════════════════════════════════════════════
@@ -555,22 +564,18 @@ async function loadStep2Resources() {
   state.hashtagPool = ht;
 }
 
-async function openRegisterPage(type, entryData = null, opts = {}) {
+async function openRegisterPage(type = null, entryData = null, opts = {}) {
   const fromPage = opts.fromPageOverride || (state.currentPage === 'register' ? 'review' : state.currentPage) || 'review';
   state.registerType = type;
   state.editingEntryId = entryData ? entryData.id : null;
   state.selectedMovie = null;
+  resetMovieSearchStep();
 
   $('register-title').textContent = entryData
     ? (type === 'review' ? '평가 수정' : '보고싶어요 수정')
-    : (type === 'review' ? '평가 등록' : '보고싶어요 등록');
+    : registerTitleForType(type);
 
-  // Show/hide sections
-  $('watch-status-section').style.display = type === 'review' ? 'block' : 'none';
-  $('ratings-section').style.display = type === 'review' ? 'block' : 'none';
-
-  // Reset steps
-  resetStep2();
+  applyRegisterTypeUI(type);
 
   if (entryData) {
     // 수정 모드: 영화 검색 단계를 건너뛰고 바로 정보 수정 화면으로 진입
@@ -579,6 +584,7 @@ async function openRegisterPage(type, entryData = null, opts = {}) {
     $('step1-next-btn').disabled = false;
 
     await loadStep2Resources();
+    resetStep2();
     setSelectedHashtags(entryData.hashtags || []);
 
     // Fill step 2
@@ -630,6 +636,11 @@ async function openRegisterPage(type, entryData = null, opts = {}) {
 
     // 수정 모드: 영화 검색(1단계)을 건너뛰고 정보 수정(2단계)부터 시작
     showStep(2);
+  } else if (opts.movie) {
+    state.selectedMovie = opts.movie;
+    setSelectedMovieUI(opts.movie);
+    $('step1-next-btn').disabled = false;
+    await prepareRegisterForm(type);
   } else {
     showStep(1);
   }
@@ -641,9 +652,41 @@ async function openRegisterPage(type, entryData = null, opts = {}) {
   }
 }
 
+function registerTitleForType(type) {
+  if (type === 'review') return '평가 등록';
+  if (type === 'watchlist') return '보고싶어요 등록';
+  return '영화 등록';
+}
+
+function applyRegisterTypeUI(type) {
+  $('register-title').textContent = registerTitleForType(type);
+  $('watch-status-section').style.display = type === 'review' ? 'block' : 'none';
+  $('ratings-section').style.display = type === 'review' ? 'block' : 'none';
+}
+
+async function prepareRegisterForm(type) {
+  state.registerType = type;
+  applyRegisterTypeUI(type);
+  await loadStep2Resources();
+  resetStep2();
+  showStep(2);
+}
+
+async function chooseRegisterType(type) {
+  await prepareRegisterForm(type);
+}
+
 function showStep(n) {
   document.querySelectorAll('.register-step').forEach(s => s.classList.remove('active'));
   $(`step-${n}`).classList.add('active');
+}
+
+function resetMovieSearchStep() {
+  $('reg-search-results').innerHTML = '';
+  $('reg-selected-movie').style.display = 'none';
+  $('reg-movie-search').value = '';
+  $('step1-next-btn').disabled = true;
+  $('reg-type-selected-title').textContent = '';
 }
 
 function resetStep2() {
@@ -796,22 +839,24 @@ $('reg-reselect-btn').onclick = () => {
   $('reg-selected-movie').style.display = 'none';
   $('step1-next-btn').disabled = true;
   $('reg-movie-search').value = '';
+  $('reg-type-selected-title').textContent = '';
 };
 
 $('step1-next-btn').onclick = async () => {
-  // Load templates before step 2
-  const [rt, ct, ht] = await Promise.all([
-    API('/api/templates/ratings'),
-    API('/api/templates/comments'),
-    API('/api/hashtags'),
-  ]);
-  state.ratingTemplates = rt;
-  state.commentTemplates = ct;
-  state.hashtagPool = ht;
-  showStep(2);
+  if (!state.selectedMovie) return;
+  if (!state.registerType) {
+    $('reg-type-selected-title').textContent = `${state.selectedMovie.title}${state.selectedMovie.year ? ` (${state.selectedMovie.year})` : ''}`;
+    showStep('type');
+    return;
+  }
+  await prepareRegisterForm(state.registerType);
 };
 
 $('step2-back-btn').onclick = () => showStep(1);
+$('type-back-btn').onclick = () => showStep(1);
+document.querySelectorAll('.register-type-card').forEach(btn => {
+  btn.onclick = () => chooseRegisterType(btn.dataset.registerType);
+});
 
 // ── Watch Status ────────────────────────────────────────────────
 document.querySelectorAll('.status-btn').forEach(btn => {
@@ -1239,8 +1284,7 @@ document.querySelectorAll('.gnb-btn').forEach(btn => {
   };
 });
 
-$('review-fab').onclick = () => openRegisterPage('review');
-$('watchlist-fab').onclick = () => openRegisterPage('watchlist');
+$('home-fab').onclick = () => openRegisterPage(null);
 
 function refreshCurrentPage() {
   if (state.currentPage === 'home') loadHome(true);

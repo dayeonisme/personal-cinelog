@@ -56,3 +56,35 @@ def test_watchlist_default_comment_label_is_reason():
     assert "function defaultCommentNameForType(type)" in script
     assert "type === 'watchlist' ? '보고싶은 이유' : '감상평'" in script
     assert "const name = isDefault ? defaultCommentNameForType(type)" in script
+
+
+def test_movie_detail_renders_watchlist_section_before_review_section():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    detail_start = script.index("function renderMovieDetail(data)")
+    detail_end = script.index("function buildMovieDetailEntrySection", detail_start)
+    render_movie_detail = script[detail_start:detail_end]
+
+    assert render_movie_detail.index("${watchlistSection}") < render_movie_detail.index("${reviewSection}")
+
+
+def test_movie_detail_empty_sections_have_add_buttons():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert "function buildMovieDetailEmptySection(kind, title, movie)" in script
+    assert "function openRegisterForMovie(kind, movie = state.currentMovieDetail?.movie)" in script
+    assert "보고싶어요 추가" in script
+    assert "평가 추가" in script
+
+
+def test_registration_entrypoint_is_home_fab_with_type_choice():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+
+    assert 'id="home-fab"' in template
+    assert 'id="review-fab"' not in template
+    assert 'id="watchlist-fab"' not in template
+    assert 'id="step-type"' in template
+    assert 'data-register-type="review"' in template
+    assert 'data-register-type="watchlist"' in template
+    assert "$('home-fab').onclick = () => openRegisterPage(null);" in script
+    assert "function chooseRegisterType(type)" in script
