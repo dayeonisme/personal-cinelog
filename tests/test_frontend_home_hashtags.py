@@ -134,3 +134,19 @@ def test_rating_display_uses_module_emoji_and_clipped_half_symbol():
     assert "star-disp-symbol" in script
     assert ".star-disp-symbol" in css
     assert ".star-disp-half::after" not in css
+
+
+def test_home_page_has_load_more_pagination_button():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    home_start = script.index("async function loadHome")
+    home_end = script.index("// ══════════════════════════════════════════════════════════════\n// REVIEW PAGE", home_start)
+    home_section = script[home_start:home_end]
+
+    assert 'id="home-load-more"' in template
+    assert "loadMoreHome()" in template
+    assert "$('home-load-more').style.display =" in home_section
+    assert "state.homeEntries.length < state.homeTotal ? 'block' : 'none'" in home_section
+    assert "function loadMoreHome()" in home_section
+    assert "state.homePage++;" in home_section
+    assert "loadHome(false);" in home_section
