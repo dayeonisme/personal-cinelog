@@ -169,7 +169,7 @@ def _tmdb_detail_to_movie(data):
         'plot': data.get('overview'),
         'poster_url': _tmdb_poster_url(data.get('poster_path')),
         'genre': ', '.join(genres),
-        'runtime': str(runtime) if runtime else None,
+        'runtime': f"{runtime} min" if runtime else None,
         'country': ', '.join(countries) or None,
     }
 
