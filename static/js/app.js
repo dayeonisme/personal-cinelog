@@ -207,6 +207,13 @@ async function loadHome(reset = false) {
   state.homeTotal = data.total || 0;
 
   renderHomeGrid();
+  $('home-load-more').style.display =
+    state.homeEntries.length < state.homeTotal ? 'block' : 'none';
+}
+
+function loadMoreHome() {
+  state.homePage++;
+  loadHome(false);
 }
 
 function renderHomeGrid() {
