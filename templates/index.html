@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cinelog</title>
-<link rel="stylesheet" href="/static/css/style.css?v=20260613-gnb-rating">
+<link rel="stylesheet" href="/static/css/style.css?v=20260613-home-load-more">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -76,6 +76,9 @@
     </div>
     <div id="home-grid" class="movie-grid"></div>
     <div id="home-loading" class="loading-indicator" style="display:none">로딩 중...</div>
+    <div id="home-load-more" class="load-more" style="display:none">
+      <button onclick="loadMoreHome()">더 보기</button>
+    </div>
     <button class="fab" id="home-fab" title="영화 등록">+</button>
   </div>
 
@@ -301,6 +304,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=20260613-gnb-rating"></script>
+<script src="/static/js/app.js?v=20260613-home-load-more"></script>
 </body>
 </html>
