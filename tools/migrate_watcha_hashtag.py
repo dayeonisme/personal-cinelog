@@ -1,7 +1,9 @@
 """
-왓챠에서 마이그레이션한 모든 평가/보고싶어요에 '왓챠백업' 해시태그를 일괄 추가합니다.
+왓챠에서 마이그레이션한 평가/보고싶어요에 '왓챠백업' 해시태그를 동기화합니다.
 
-대상: Movie.imdb_id가 'watcha:'로 시작하는 모든 Entry (review + watchlist)
+대상:
+  - review: RatingModule.name == '왓챠 별점'
+  - watchlist: Movie.imdb_id가 'watcha:'로 시작하는 Entry
 
 실행:
     cd /Users/dayeon.park/dev/movie-review
@@ -16,7 +18,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from app import app
 from database import db
-from models import Entry, Hashtag, Movie
+from models import Entry, Hashtag, Movie, RatingModule
 
 TAG_NAME = "왓챠백업"
 
@@ -31,33 +33,59 @@ def get_or_create_hashtag(name: str) -> Hashtag:
 
 
 def watcha_backup_entries():
-    return Entry.query.join(Movie).filter(Movie.imdb_id.like("watcha:%")).all()
+    watcha_reviews = Entry.query.filter(
+        Entry.entry_type == "review",
+        Entry.ratings.any(RatingModule.name == "왓챠 별점"),
+    )
+    watcha_watchlist = Entry.query.join(Movie).filter(
+        Entry.entry_type == "watchlist",
+        Movie.imdb_id.like("watcha:%"),
+    )
+    return watcha_reviews.union(watcha_watchlist).all()
 
 
-def add_watcha_backup_hashtag():
+def sync_watcha_backup_hashtag():
     tag = get_or_create_hashtag(TAG_NAME)
     entries = watcha_backup_entries()
+    target_ids = {entry.id for entry in entries}
 
-    updated = 0
+    added = 0
     skipped = 0
     for entry in entries:
         if tag in entry.hashtags:
             skipped += 1
             continue
         entry.hashtags.append(tag)
-        updated += 1
+        added += 1
+
+    removed = 0
+    incorrectly_tagged_entries = Entry.query.filter(
+        Entry.hashtags.any(Hashtag.name == TAG_NAME),
+        ~Entry.id.in_(target_ids),
+    ).all()
+    for entry in incorrectly_tagged_entries:
+        entry.hashtags.remove(tag)
+        removed += 1
 
     db.session.commit()
-    return updated, skipped, len(entries)
+    return added, skipped, removed, len(entries)
+
+
+def add_watcha_backup_hashtag():
+    added, skipped, _removed, total = sync_watcha_backup_hashtag()
+    return added, skipped, total
 
 def main():
     with app.app_context():
         if not watcha_backup_entries():
-            print("왓챠에서 마이그레이션한 항목을 찾지 못했습니다 (Movie.imdb_id LIKE 'watcha:%').")
+            print("왓챠에서 마이그레이션한 항목을 찾지 못했습니다.")
             return
 
-        updated, skipped, total = add_watcha_backup_hashtag()
-        print(f"'{TAG_NAME}' 해시태그 추가 완료: {updated}건 추가, {skipped}건은 이미 보유하여 건너뜀 (총 대상 {total}건)")
+        added, skipped, removed, total = sync_watcha_backup_hashtag()
+        print(
+            f"'{TAG_NAME}' 해시태그 동기화 완료: "
+            f"{added}건 추가, {skipped}건 유지, {removed}건 제거 (총 대상 {total}건)"
+        )
 
 
 if __name__ == "__main__":
