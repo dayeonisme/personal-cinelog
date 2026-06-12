@@ -4,14 +4,24 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_home_grid_renders_entry_hashtags():
+def test_home_grid_hover_overlay_does_not_render_entry_hashtags():
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
     render_home_start = script.index("function renderHomeGrid()")
     render_home_end = script.index("// ══════════════════════════════════════════════════════════════", render_home_start)
     render_home_grid = script[render_home_start:render_home_end]
 
-    assert "const hashtagsHtml = buildHashtagsHtml(entry.hashtags);" in render_home_grid
-    assert "${hashtagsHtml}" in render_home_grid
+    assert "buildHashtagsHtml(entry.hashtags)" not in render_home_grid
+    assert "${hashtagsHtml}" not in render_home_grid
+
+
+def test_entry_list_cards_still_render_entry_hashtags():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    entry_card_start = script.index("function buildEntryCard(entry)")
+    entry_card_end = script.index("// ── Kebab Menu", entry_card_start)
+    build_entry_card = script[entry_card_start:entry_card_end]
+
+    assert "const hashtagsHtml = buildHashtagsHtml(entry.hashtags);" in build_entry_card
+    assert "${hashtagsHtml}" in build_entry_card
 
 
 def test_movie_detail_renders_hashtags_in_movie_metadata_not_entry_sections():
