@@ -14,6 +14,17 @@ def test_home_grid_hover_overlay_does_not_render_entry_hashtags():
     assert "${hashtagsHtml}" not in render_home_grid
 
 
+def test_home_grid_hover_rating_uses_compact_star_score_only():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    render_home_start = script.index("function renderHomeGrid()")
+    render_home_end = script.index("// ══════════════════════════════════════════════════════════════", render_home_start)
+    render_home_grid = script[render_home_start:render_home_end]
+
+    assert '<div class="movie-card-overlay-rating">⭐ ${rating.toFixed(1)}</div>' in render_home_grid
+    assert "renderStarsHtml(rating)" not in render_home_grid
+    assert "/5.0" not in render_home_grid
+
+
 def test_entry_list_cards_still_render_entry_hashtags():
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
     entry_card_start = script.index("function buildEntryCard(entry)")

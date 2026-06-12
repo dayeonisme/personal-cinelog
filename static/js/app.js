@@ -236,7 +236,7 @@ function renderHomeGrid() {
     const director = m.director && m.director !== 'N/A' ? m.director : '';
     const rating = defaultRatingOf(entry);
     const ratingHtml = rating != null
-      ? `<div class="movie-card-overlay-rating">${renderStarsHtml(rating)} ${rating.toFixed(1)}/5.0</div>`
+      ? `<div class="movie-card-overlay-rating">⭐ ${rating.toFixed(1)}</div>`
       : '';
     return `
       <div class="movie-card ${typeClass}" data-entry-id="${entry.id}" onclick="navigateToMovie(${m.id})">
