@@ -1,7 +1,7 @@
 """
-왓챠에서 마이그레이션한 모든 평가(리뷰)에 '왓챠 백업' 해시태그를 일괄 추가합니다.
+왓챠에서 마이그레이션한 모든 평가/보고싶어요에 '왓챠백업' 해시태그를 일괄 추가합니다.
 
-대상: RatingModule.name == '왓챠 별점' 을 가진 Entry (review)
+대상: Movie.imdb_id가 'watcha:'로 시작하는 모든 Entry (review + watchlist)
 
 실행:
     cd /Users/dayeon.park/dev/movie-review
@@ -16,9 +16,9 @@ if str(ROOT_DIR) not in sys.path:
 
 from app import app
 from database import db
-from models import Entry, Hashtag, RatingModule
+from models import Entry, Hashtag, Movie
 
-TAG_NAME = "왓챠 백업"
+TAG_NAME = "왓챠백업"
 
 
 def get_or_create_hashtag(name: str) -> Hashtag:
@@ -30,33 +30,34 @@ def get_or_create_hashtag(name: str) -> Hashtag:
     return tag
 
 
+def watcha_backup_entries():
+    return Entry.query.join(Movie).filter(Movie.imdb_id.like("watcha:%")).all()
+
+
+def add_watcha_backup_hashtag():
+    tag = get_or_create_hashtag(TAG_NAME)
+    entries = watcha_backup_entries()
+
+    updated = 0
+    skipped = 0
+    for entry in entries:
+        if tag in entry.hashtags:
+            skipped += 1
+            continue
+        entry.hashtags.append(tag)
+        updated += 1
+
+    db.session.commit()
+    return updated, skipped, len(entries)
+
 def main():
     with app.app_context():
-        tag = get_or_create_hashtag(TAG_NAME)
-
-        entry_ids = [
-            row[0]
-            for row in db.session.query(RatingModule.entry_id)
-            .filter(RatingModule.name == "왓챠 별점")
-            .distinct()
-            .all()
-        ]
-
-        if not entry_ids:
-            print("왓챠에서 마이그레이션한 평가를 찾지 못했습니다 (RatingModule.name == '왓챠 별점').")
+        if not watcha_backup_entries():
+            print("왓챠에서 마이그레이션한 항목을 찾지 못했습니다 (Movie.imdb_id LIKE 'watcha:%').")
             return
 
-        updated = 0
-        skipped = 0
-        for entry in Entry.query.filter(Entry.id.in_(entry_ids)).all():
-            if tag in entry.hashtags:
-                skipped += 1
-                continue
-            entry.hashtags.append(tag)
-            updated += 1
-
-        db.session.commit()
-        print(f"'{TAG_NAME}' 해시태그 추가 완료: {updated}건 추가, {skipped}건은 이미 보유하여 건너뜀 (총 대상 {len(entry_ids)}건)")
+        updated, skipped, total = add_watcha_backup_hashtag()
+        print(f"'{TAG_NAME}' 해시태그 추가 완료: {updated}건 추가, {skipped}건은 이미 보유하여 건너뜀 (총 대상 {total}건)")
 
 
 if __name__ == "__main__":
