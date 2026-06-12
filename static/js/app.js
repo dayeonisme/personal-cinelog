@@ -472,11 +472,22 @@ function renderMovieDetail(data) {
         <div class="movie-detail-empty">아직 등록된 보고싶어요가 없습니다.</div>
       </div>`;
 
+  // 왓챠피디아 링크: imdb_id가 'watcha:XXXXX' 형식인 경우만
+  let watchaPediaBtn = '';
+  if (m.imdb_id && m.imdb_id.startsWith('watcha:')) {
+    const watchaId = m.imdb_id.split(':')[1];
+    const watchaUrl = `https://pedia.watcha.com/ko/contents/${watchaId}`;
+    watchaPediaBtn = `<a class="watcha-pedia-btn" href="${watchaUrl}" target="_blank" rel="noopener" title="왓챠피디아에서 보기"><img src="/static/images/watcha-logo.svg" alt="왓챠피디아"></a>`;
+  }
+
   $('movie-detail-content').innerHTML = `
     <div class="movie-detail-hero">
       ${poster}
       <div class="movie-detail-info">
-        <h1 class="movie-detail-title">${escHtml(m.title)} ${year}</h1>
+        <div class="movie-detail-title-row">
+          <h1 class="movie-detail-title">${escHtml(m.title)} ${year}</h1>
+          ${watchaPediaBtn}
+        </div>
         ${director ? `<div class="movie-detail-director">감독 · ${escHtml(director)}</div>` : ''}
         ${metaHtml}
       </div>
