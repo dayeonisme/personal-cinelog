@@ -1,3 +1,4 @@
+import app as app_module
 from app import app
 from database import db
 from models import Entry, Movie, RatingModule
@@ -10,13 +11,24 @@ def configure_test_db(tmp_path):
     if not TEST_DB_CONFIGURED:
         app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{tmp_path / 'test.db'}"
         app.config["TESTING"] = True
+        app.config["AUTO_ORIGINAL_SOURCE_HASHTAG"] = False
         app._got_first_request = False
         app.extensions.pop("sqlalchemy", None)
         db.init_app(app)
         TEST_DB_CONFIGURED = True
+    app.config["AUTO_ORIGINAL_SOURCE_HASHTAG"] = False
     with app.app_context():
         db.drop_all()
         db.create_all()
+
+
+class FakeTmdbResponse:
+    def __init__(self, payload, status_code=200):
+        self.payload = payload
+        self.status_code = status_code
+
+    def json(self):
+        return self.payload
 
 
 def create_movie(**kwargs):
@@ -155,6 +167,58 @@ def test_watchlist_default_comment_name_falls_back_to_reason_label(tmp_path):
 
     assert response.status_code == 201
     assert response.json["comments"][0]["name"] == "보고싶은 이유"
+
+
+def test_creating_entry_auto_adds_original_source_hashtag_from_tmdb_keywords(tmp_path, monkeypatch):
+    configure_test_db(tmp_path)
+    app.config["AUTO_ORIGINAL_SOURCE_HASHTAG"] = True
+    calls = []
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        calls.append({"url": url, "headers": headers, "params": params, "timeout": timeout})
+        return FakeTmdbResponse({"keywords": [{"name": "based on comic"}]})
+
+    monkeypatch.setattr(app_module, "TMDB_ACCESS_TOKEN", "token")
+    monkeypatch.setattr(app_module.requests, "get", fake_get)
+
+    response = app.test_client().post(
+        "/api/entries",
+        json={
+            "entry_type": "review",
+            "movie": {"imdb_id": "tmdb:424", "title": "원작 영화"},
+            "ratings": [{"name": "평점", "emoji": "⭐", "value": 4.0, "is_default": True}],
+            "hashtags": ["기대작"],
+        },
+    )
+
+    assert response.status_code == 201
+    assert calls[0]["url"] == "https://api.themoviedb.org/3/movie/424/keywords"
+    assert calls[0]["headers"]["Authorization"] == "Bearer token"
+    hashtag_names = {tag["name"] for tag in response.json["hashtags"]}
+    assert hashtag_names == {"기대작", "원작존재"}
+
+
+def test_original_source_keyword_lookup_failure_does_not_block_entry_creation(tmp_path, monkeypatch):
+    configure_test_db(tmp_path)
+    app.config["AUTO_ORIGINAL_SOURCE_HASHTAG"] = True
+
+    def fake_get(url, headers=None, params=None, timeout=None):
+        raise app_module.requests.RequestException("tmdb unavailable")
+
+    monkeypatch.setattr(app_module, "TMDB_ACCESS_TOKEN", "token")
+    monkeypatch.setattr(app_module.requests, "get", fake_get)
+
+    response = app.test_client().post(
+        "/api/entries",
+        json={
+            "entry_type": "watchlist",
+            "movie": {"imdb_id": "tmdb:425", "title": "키워드 실패 영화"},
+            "comments": [{"content": "나중에", "is_default": True}],
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json["hashtags"] == []
 
 
 def test_creating_review_removes_existing_watchlist_only_entry_for_same_movie(tmp_path):

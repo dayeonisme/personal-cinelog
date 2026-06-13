@@ -1,13 +1,13 @@
 """
 TMDb 키워드를 검색해 소설/만화/희곡 등 원작이 존재하는 영화의 평가·보고싶어요
-항목에 '원작 존재' 해시태그를 일괄 추가합니다.
+항목에 '원작존재' 해시태그를 일괄 추가합니다.
 
 판별 방식: TMDb의 영화별 keywords(/movie/{id}/keywords)에서
 "based on novel", "based on novel or book", "based on book", "based on young adult novel",
 "based on short story", "based on graphic novel", "based on comic", "based on memoir or
 autobiography", "based on play or musical" 등 원작이 있음을 가리키는 키워드가 있으면
 원작이 있는 것으로 간주합니다. (소설뿐 아니라 만화/희곡/논픽션 등도 포함되므로
-태그명을 '원작 존재' 로 합니다. TMDb 데이터에 키워드가 등록되지 않은 영화는
+태그명을 '원작존재' 로 합니다. TMDb 데이터에 키워드가 등록되지 않은 영화는
 누락될 수 있습니다.)
 
 실행:
@@ -29,6 +29,8 @@ if str(ROOT_DIR) not in sys.path:
 import requests
 
 from app import (
+    ORIGINAL_SOURCE_KEYWORD_HINTS,
+    ORIGINAL_SOURCE_TAG_NAME,
     TMDB_API_BASE,
     _tmdb_configured,
     _tmdb_headers,
@@ -38,24 +40,12 @@ from app import (
 from database import db
 from models import Entry, Hashtag, Movie
 
-TAG_NAME = "원작 존재"
-
-# 키워드 이름에 아래 부분 문자열이 포함되면 '책/소설 원작'으로 판단
-NOVEL_KEYWORD_HINTS = [
-    "based on novel",
-    "based on book",
-    "based on young adult novel",
-    "based on short story",
-    "based on graphic novel",
-    "based on comic",
-    "based on memoir or autobiography",
-    "based on play or musical",
-]
+TAG_NAME = ORIGINAL_SOURCE_TAG_NAME
 
 
 def is_novel_based(keywords):
     names = [(k.get("name") or "").strip().lower() for k in keywords]
-    return any(any(hint in name for hint in NOVEL_KEYWORD_HINTS) for name in names)
+    return any(any(hint in name for hint in ORIGINAL_SOURCE_KEYWORD_HINTS) for name in names)
 
 
 def fetch_keywords(tmdb_id):
@@ -96,7 +86,7 @@ def main():
                 print(f"  [{i}/{len(movies)}] {movie.title}: 키워드 조회 실패 (건너뜀)")
             elif is_novel_based(keywords):
                 novel_movie_ids.append(movie.id)
-                matched = [k.get("name") for k in keywords if any(h in (k.get("name") or "").lower() for h in NOVEL_KEYWORD_HINTS)]
+                matched = [k.get("name") for k in keywords if any(h in (k.get("name") or "").lower() for h in ORIGINAL_SOURCE_KEYWORD_HINTS)]
                 print(f"  [{i}/{len(movies)}] {movie.title}: 원작 있음 ({', '.join(matched)})")
             time.sleep(0.05)  # TMDb rate limit 여유
 
