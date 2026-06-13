@@ -1,9 +1,9 @@
 """
-왓챠에서 마이그레이션한 평가/보고싶어요에 '왓챠백업' 해시태그를 동기화합니다.
+왓챠에서 마이그레이션한 평가에 '왓챠백업' 해시태그를 동기화합니다.
 
 대상:
   - review: RatingModule.name == '왓챠 별점'
-  - watchlist: Movie.imdb_id가 'watcha:'로 시작하는 Entry
+  - watchlist: '왓챠백업' 해시태그를 유지하지 않음
 
 실행:
     cd /Users/dayeon.park/dev/movie-review
@@ -18,7 +18,7 @@ if str(ROOT_DIR) not in sys.path:
 
 from app import app
 from database import db
-from models import Entry, Hashtag, Movie, RatingModule
+from models import Entry, Hashtag, RatingModule
 
 TAG_NAME = "왓챠백업"
 
@@ -33,15 +33,10 @@ def get_or_create_hashtag(name: str) -> Hashtag:
 
 
 def watcha_backup_entries():
-    watcha_reviews = Entry.query.filter(
+    return Entry.query.filter(
         Entry.entry_type == "review",
         Entry.ratings.any(RatingModule.name == "왓챠 별점"),
-    )
-    watcha_watchlist = Entry.query.join(Movie).filter(
-        Entry.entry_type == "watchlist",
-        Movie.imdb_id.like("watcha:%"),
-    )
-    return watcha_reviews.union(watcha_watchlist).all()
+    ).all()
 
 
 def sync_watcha_backup_hashtag():
