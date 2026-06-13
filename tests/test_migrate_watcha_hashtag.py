@@ -36,7 +36,7 @@ def create_entry(title, imdb_id, entry_type, rating_name=None):
     return entry
 
 
-def test_migrate_watcha_hashtag_tags_imported_watcha_entries_only(tmp_path):
+def test_migrate_watcha_hashtag_tags_imported_watcha_reviews_only(tmp_path):
     configure_test_db(tmp_path)
 
     with app.app_context():
@@ -46,14 +46,15 @@ def test_migrate_watcha_hashtag_tags_imported_watcha_entries_only(tmp_path):
         tmdb_watchlist = create_entry("TMDb 보고싶어요", "tmdb:watchlist", "watchlist")
         wrong_tag = Hashtag(name="왓챠백업")
         db.session.add(wrong_tag)
+        watcha_watchlist.hashtags.append(wrong_tag)
         direct_review_on_watcha_movie.hashtags.append(wrong_tag)
         db.session.commit()
 
         added, skipped, removed, total = migrate_watcha_hashtag.sync_watcha_backup_hashtag()
 
         tag = Hashtag.query.filter_by(name="왓챠백업").one()
-        assert (added, skipped, removed, total) == (2, 0, 1, 2)
+        assert (added, skipped, removed, total) == (1, 0, 2, 1)
         assert tag in watcha_review.hashtags
-        assert tag in watcha_watchlist.hashtags
+        assert tag not in watcha_watchlist.hashtags
         assert tag not in direct_review_on_watcha_movie.hashtags
         assert tag not in tmdb_watchlist.hashtags
