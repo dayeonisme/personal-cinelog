@@ -438,6 +438,9 @@ $('modal-delete-confirm').onclick = async () => {
   // Refresh current page
   if (state.currentPage === 'review') loadReviews(true);
   else if (state.currentPage === 'watchlist') loadWatchlist(true);
+  else if (state.currentPage === 'movie' && state.currentMovieDetail?.movie?.id) {
+    loadMovieDetail(state.currentMovieDetail.movie.id);
+  }
   else loadHome(true);
 };
 
@@ -553,7 +556,10 @@ function buildMovieDetailEntrySection(kind, title, entry) {
     <div class="movie-detail-section ${kind}">
       <div class="movie-detail-section-header">
         <h2 class="movie-detail-section-title">${escHtml(title)} ${badge}</h2>
-        <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
+        <div class="movie-detail-section-actions">
+          <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
+          <button type="button" class="movie-detail-delete-btn" onclick="confirmDelete(${entry.id})">삭제</button>
+        </div>
       </div>
       ${ratingsHtml}
       ${commentsHtml}

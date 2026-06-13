@@ -98,6 +98,27 @@ def test_movie_detail_empty_sections_have_add_buttons():
     assert "평가 추가" in script
 
 
+def test_movie_detail_entry_sections_have_edit_and_delete_actions():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+    section_start = script.index("function buildMovieDetailEntrySection")
+    section_end = script.index("function openRegisterForMovie", section_start)
+    build_detail_section = script[section_start:section_end]
+    delete_start = script.index("$('modal-delete-confirm').onclick")
+    delete_end = script.index("$('modal-name-error-close')", delete_start)
+    delete_flow = script[delete_start:delete_end]
+
+    assert "movie-detail-section-actions" in build_detail_section
+    assert "movie-detail-edit-btn" in build_detail_section
+    assert "movie-detail-delete-btn" in build_detail_section
+    assert "confirmDelete(${entry.id})" in build_detail_section
+    assert "state.currentPage === 'movie'" in delete_flow
+    assert "state.currentMovieDetail?.movie?.id" in delete_flow
+    assert "loadMovieDetail(state.currentMovieDetail.movie.id)" in delete_flow
+    assert ".movie-detail-section-actions" in css
+    assert ".movie-detail-delete-btn" in css
+
+
 def test_registration_entrypoint_is_home_fab_with_type_choice():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
