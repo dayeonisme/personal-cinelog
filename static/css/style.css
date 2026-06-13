@@ -661,12 +661,19 @@ img { display: block; }
 }
 .movie-detail-section.review .movie-detail-section-title .badge { color: var(--review-border); border-color: var(--review-border); }
 .movie-detail-section.watchlist .movie-detail-section-title .badge { color: var(--watchlist-border); border-color: var(--watchlist-border); }
+.movie-detail-section-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .movie-detail-edit-btn {
   flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
   color: var(--accent); background: transparent; border: 1px solid var(--accent);
   padding: 6px 16px; cursor: pointer; transition: background 0.15s, color 0.15s;
 }
 .movie-detail-edit-btn:hover { background: var(--accent); color: var(--bg-card); }
+.movie-detail-delete-btn {
+  flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
+  color: var(--accent-err); background: transparent; border: 1px solid rgba(192,96,96,.65);
+  padding: 6px 16px; cursor: pointer; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.movie-detail-delete-btn:hover { background: var(--accent-err); border-color: var(--accent-err); color: #fff; }
 .movie-detail-add-btn {
   flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;
   color: var(--accent); background: transparent; border: 1px solid var(--accent);
