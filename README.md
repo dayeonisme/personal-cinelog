@@ -4,6 +4,17 @@
 
 ---
 
+## 주요 기능
+
+- 영화별 `평가`와 `보고싶어요`를 별도로 등록하고 영화 상세에서 함께 확인
+- 기본 평점과 커스텀 별점 모듈 지원
+- 커스텀 별점 이모지 선택기 지원
+- Markdown 코멘트와 이미지 첨부 지원
+- 해시태그 자동완성 및 검색 지원
+- TMDb 키워드 기반 `원작존재` 해시태그 자동 부여
+
+---
+
 ## 폴더 구조
 
 ```
@@ -98,11 +109,27 @@ TMDB_ACCESS_TOKEN="발급받은_Read_Access_Token" python app.py
 Movie
 └── Entry  (type: review | watchlist)
     ├── RatingModule   이름 · 이모지 · 점수 (0~5, 0.5 단위)
-    └── CommentModule  이름 · 내용 (Markdown) · 이미지[]
+    ├── CommentModule  이름 · 내용 (Markdown) · 이미지[]
+    └── Hashtag        공백 없는 태그명
 ```
 
 - **RatingTemplate** — 이전에 등록한 커스텀 별점명 목록 (재사용 드롭다운용)
 - **CommentTemplate** — 이전에 등록한 커스텀 코멘트명 목록 (재사용 드롭다운용)
+
+---
+
+## 해시태그 정책
+
+- 해시태그 이름에는 공백을 저장하지 않습니다. 예: `원작 존재` → `원작존재`
+- `원작존재`
+  - 새 항목 등록 시 TMDb `/movie/{id}/keywords`를 조회해 자동 추가합니다.
+  - `based on novel`, `based on book`, `based on comic`, `based on play or musical` 등 원작 존재를 뜻하는 키워드가 기준입니다.
+  - TMDb 조회 실패 시 등록은 계속 진행하고 태그만 생략합니다.
+  - 기존 항목은 `tools/migrate_novel_hashtag.py`로 백필할 수 있습니다.
+- `왓챠백업`
+  - 왓챠에서 가져온 평가 항목 중 `RatingModule.name == "왓챠 별점"`인 경우에만 유지합니다.
+  - `보고싶어요` 항목에는 유지하지 않습니다.
+  - 정리는 `tools/migrate_watcha_hashtag.py`로 동기화합니다.
 
 ---
 
@@ -116,6 +143,8 @@ Movie
 | DELETE | `/api/entries/<id>` | 삭제 |
 | GET | `/api/search/movies?q=` | TMDb 영화 검색 |
 | GET | `/api/search/movies/<movie_key>` | 영화 상세 조회 |
+| GET | `/api/movies/<id>` | 앱 내 영화 상세 조회 |
+| GET | `/api/hashtags` | 해시태그 목록 |
 | POST | `/api/upload` | 이미지 첨부 |
 | GET | `/api/templates/ratings` | 커스텀 별점명 목록 |
 | GET | `/api/templates/comments` | 커스텀 코멘트명 목록 |
@@ -144,6 +173,7 @@ Cinelog는 영화 검색과 표시를 위해 [The Movie Database (TMDB)](https:/
 | `static/uploads/*` | 사용자 첨부 이미지 |
 | `.env` | API 키 등 환경 변수 |
 | `logs/` | 런타임 로그 |
+| `AGENTS.md` | 로컬 에이전트 지침 |
 
 ---
 
