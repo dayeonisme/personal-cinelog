@@ -70,6 +70,17 @@ with app.app_context():
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+ORIGINAL_SOURCE_TAG_NAME = '원작존재'
+ORIGINAL_SOURCE_KEYWORD_HINTS = [
+    'based on novel',
+    'based on book',
+    'based on young adult novel',
+    'based on short story',
+    'based on graphic novel',
+    'based on comic',
+    'based on memoir or autobiography',
+    'based on play or musical',
+]
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -90,6 +101,48 @@ def _tmdb_params(params):
     if not TMDB_ACCESS_TOKEN and TMDB_API_KEY:
         merged['api_key'] = TMDB_API_KEY
     return merged
+
+
+def _tmdb_keywords_indicate_original_source(keywords):
+    names = [(k.get('name') or '').strip().lower() for k in keywords or []]
+    return any(
+        any(hint in name for hint in ORIGINAL_SOURCE_KEYWORD_HINTS)
+        for name in names
+    )
+
+
+def _fetch_tmdb_keywords(tmdb_id):
+    if not tmdb_id or not _tmdb_configured():
+        return None
+    resp = requests.get(
+        f'{TMDB_API_BASE}/movie/{tmdb_id}/keywords',
+        params=_tmdb_params({}),
+        headers=_tmdb_headers(),
+        timeout=10,
+    )
+    if resp.status_code != 200:
+        return None
+    data = resp.json()
+    return data.get('keywords') or data.get('results') or []
+
+
+def _movie_has_original_source(tmdb_id):
+    try:
+        keywords = _fetch_tmdb_keywords(tmdb_id)
+    except Exception:
+        return False
+    if keywords is None:
+        return False
+    return _tmdb_keywords_indicate_original_source(keywords)
+
+
+def _hashtags_with_original_source(names, movie):
+    tag_names = list(names or [])
+    if not app.config.get('AUTO_ORIGINAL_SOURCE_HASHTAG', True):
+        return tag_names
+    if movie and _movie_has_original_source(movie.tmdb_id):
+        tag_names.append(ORIGINAL_SOURCE_TAG_NAME)
+    return tag_names
 
 
 def _tmdb_poster_url(path):
@@ -401,7 +454,7 @@ def create_entry():
     db.session.add(entry)
     db.session.flush()
 
-    entry.hashtags = _resolve_hashtags(data.get('hashtags', []))
+    entry.hashtags = _resolve_hashtags(_hashtags_with_original_source(data.get('hashtags', []), movie))
 
     # Ratings
     for i, r in enumerate(data.get('ratings', [])):
