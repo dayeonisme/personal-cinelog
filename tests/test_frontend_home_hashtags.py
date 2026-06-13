@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -208,6 +209,12 @@ def test_custom_rating_emoji_picker_is_grouped_scrollable_five_columns():
     assert "label: '기본'" in script
     assert "label: '감정'" in script
     assert "label: '취향'" in script
+    assert "label: '장르'" in script
+    assert "label: '분위기'" in script
+    assert "label: '캐릭터'" in script
+    assert "label: '기록'" in script
+    emoji_count = len(re.findall(r"'([^']+)'", script[script.index("const RATING_EMOJI_GROUPS = ["):script.index("];", script.index("const RATING_EMOJI_GROUPS = ["))]))
+    assert emoji_count >= 100
     assert "function renderRatingEmojiPicker(selectedEmoji = '⭐')" in script
     assert "function toggleRatingEmojiPicker(btn)" in script
     assert "function selectRatingEmoji(btn, emoji)" in script
