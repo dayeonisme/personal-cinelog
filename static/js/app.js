@@ -41,6 +41,11 @@ const API = async (path, opts = {}) => {
 
 const $ = id => document.getElementById(id);
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
+const RATING_EMOJI_GROUPS = [
+  { label: '기본', emojis: ['⭐', '🌟', '✨', '💫', '🏆', '🥇', '💯', '❤️', '🖤', '🤍'] },
+  { label: '감정', emojis: ['😍', '🥰', '😂', '😭', '🥲', '🤯', '😐', '😴', '😤', '😵'] },
+  { label: '취향', emojis: ['🎬', '🍿', '🎭', '🎨', '🔥', '💎', '🌙', '🌈', '🧠', '🫠'] },
+];
 
 // 레이어 방식으로 별점 이모지를 그려 0.5점 단위 반채움을 정확히 표현
 function renderStarsHtml(value, emoji = '⭐', max = 5) {
@@ -889,6 +894,56 @@ function addRatingModule(opts = {}) {
   wrap.appendChild(box);
 }
 
+function renderRatingEmojiPicker(selectedEmoji = '⭐') {
+  return `<div class="rating-emoji-picker" hidden>
+    ${RATING_EMOJI_GROUPS.map(group => `
+      <div class="rating-emoji-group">
+        <div class="rating-emoji-group-title">${escHtml(group.label)}</div>
+        <div class="rating-emoji-grid">
+          ${group.emojis.map(emoji => `
+            <button type="button" class="rating-emoji-option${emoji === selectedEmoji ? ' active' : ''}" data-emoji="${escAttr(emoji)}" onclick="selectRatingEmoji(this, '${escAttr(emoji)}')" aria-label="${escAttr(emoji)} 선택">
+              ${escHtml(emoji)}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    `).join('')}
+  </div>`;
+}
+
+function closeRatingEmojiPickers(except = null) {
+  document.querySelectorAll('.rating-emoji-picker').forEach(picker => {
+    if (picker !== except) picker.hidden = true;
+  });
+}
+
+function toggleRatingEmojiPicker(btn) {
+  const picker = btn.closest('.rating-emoji-field')?.querySelector('.rating-emoji-picker');
+  if (!picker) return;
+  const willOpen = picker.hidden;
+  closeRatingEmojiPickers(picker);
+  picker.hidden = !willOpen;
+}
+
+function setRatingEmojiInBox(box, emoji = '⭐') {
+  const normalized = emoji || '⭐';
+  const emojiInput = box.querySelector('.rating-emoji-input');
+  const trigger = box.querySelector('.rating-emoji-trigger-current');
+  if (emojiInput) emojiInput.value = normalized;
+  if (trigger) trigger.textContent = normalized;
+  box.querySelectorAll('.rating-emoji-option').forEach(option => {
+    option.classList.toggle('active', option.dataset.emoji === normalized);
+  });
+  updateRatingEmojiInBox(box, normalized);
+}
+
+function selectRatingEmoji(btn, emoji) {
+  const box = btn.closest('.module-box');
+  if (!box) return;
+  setRatingEmojiInBox(box, emoji);
+  closeRatingEmojiPickers();
+}
+
 function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault = false }) {
   const box = document.createElement('div');
   box.className = 'module-box';
@@ -918,7 +973,13 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
           ${templateOpts}
         </select>
         <input class="module-name-input rating-name-input" type="text" placeholder="별점 이름" value="${escAttr(name)}">
-        <input class="module-emoji-input rating-emoji-input" type="text" value="${escAttr(emoji)}" maxlength="2" placeholder="🌟">
+        <div class="rating-emoji-field">
+          <button type="button" class="rating-emoji-trigger" onclick="toggleRatingEmojiPicker(this)" aria-label="별점 이모지 선택">
+            <span class="rating-emoji-trigger-current">${escHtml(emoji || '⭐')}</span>
+          </button>
+          <input class="module-emoji-input rating-emoji-input" type="hidden" value="${escAttr(emoji || '⭐')}">
+          ${renderRatingEmojiPicker(emoji || '⭐')}
+        </div>
         <button class="module-remove-btn" onclick="this.closest('.module-box').remove()">×</button>
       </div>`;
   }
@@ -930,21 +991,18 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
     // Select listener
     const sel = box.querySelector('.rating-name-select');
     const nameInput = box.querySelector('.rating-name-input');
-    const emojiInput = box.querySelector('.rating-emoji-input');
     if (sel) {
       sel.value = name ? name : '__direct__';
       sel.addEventListener('change', () => {
         if (sel.value !== '__direct__') {
           const opt = sel.options[sel.selectedIndex];
           nameInput.value = sel.value;
-          emojiInput.value = opt.dataset.emoji || '⭐';
-          updateRatingEmojiInBox(box, emojiInput.value);
+          setRatingEmojiInBox(box, opt.dataset.emoji || '⭐');
         } else {
           nameInput.value = '';
         }
       });
     }
-    emojiInput?.addEventListener('input', () => updateRatingEmojiInBox(box, emojiInput.value));
   }
 
   // Init star interaction
@@ -953,6 +1011,10 @@ function buildRatingModuleBox({ name = '', emoji = '⭐', value = 0, isDefault =
 
   return box;
 }
+
+document.addEventListener('click', e => {
+  if (!e.target.closest('.rating-emoji-field')) closeRatingEmojiPickers();
+});
 
 function buildStarInput(value = 0, emoji = '⭐') {
   const safeEmoji = escHtml(emoji || '⭐');
