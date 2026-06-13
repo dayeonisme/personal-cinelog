@@ -194,6 +194,34 @@ def test_rating_display_uses_module_emoji_and_clipped_half_symbol():
     assert ".star-disp-half::after" not in css
 
 
+def test_custom_rating_emoji_picker_is_grouped_scrollable_five_columns():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+    module_start = script.index("function buildRatingModuleBox")
+    module_end = script.index("function buildStarInput", module_start)
+    build_rating_module = script[module_start:module_end]
+    picker_css_start = css.index(".rating-emoji-picker {")
+    picker_css_end = css.index("/* Star rating */", picker_css_start)
+    picker_css = css[picker_css_start:picker_css_end]
+
+    assert "const RATING_EMOJI_GROUPS = [" in script
+    assert "label: '기본'" in script
+    assert "label: '감정'" in script
+    assert "label: '취향'" in script
+    assert "function renderRatingEmojiPicker(selectedEmoji = '⭐')" in script
+    assert "function toggleRatingEmojiPicker(btn)" in script
+    assert "function selectRatingEmoji(btn, emoji)" in script
+    assert "rating-emoji-picker" in script
+    assert "renderRatingEmojiPicker(emoji || '⭐')" in build_rating_module
+    assert "rating-emoji-trigger" in build_rating_module
+    assert 'type="hidden"' in build_rating_module
+    assert "grid-template-columns: repeat(5, 36px);" in picker_css
+    assert "max-height: 238px;" in picker_css
+    assert "overflow-y: auto;" in picker_css
+    assert ".rating-emoji-group-title" in picker_css
+    assert ".rating-emoji-option.active" in picker_css
+
+
 def test_home_page_has_load_more_pagination_button():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
