@@ -175,12 +175,22 @@ def test_watcha_pedia_button_is_round_logo_icon_without_text_label():
 def test_rating_display_uses_module_emoji_and_clipped_half_symbol():
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
     css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
+    bg_start = css.index(".star-disp-bg {")
+    bg_end = css.index(".star-disp-fg", bg_start)
+    bg_css = css[bg_start:bg_end]
+    fg_start = css.index(".star-disp-fg {")
+    fg_end = css.index(".star-disp-symbol", fg_start)
+    fg_css = css[fg_start:fg_end]
 
     assert "function renderStarsHtml(value, emoji = '⭐', max = 5)" in script
     assert "const safeEmoji = escHtml(emoji || '⭐');" in script
     assert "renderStarsHtml(r.value || 0, emoji)" in script
+    assert "else if (value >= i - 0.5) pct = 50;" in script
+    assert 'style="width:${pct}%"' in script
     assert "star-disp-symbol" in script
     assert ".star-disp-symbol" in css
+    assert "filter: grayscale(1) brightness(0);" in bg_css
+    assert "filter: none;" in fg_css
     assert ".star-disp-half::after" not in css
 
 

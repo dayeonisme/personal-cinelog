@@ -530,8 +530,17 @@ img { display: block; }
   position: absolute; top: 0; left: 0;
   font-size: inherit; line-height: 1; white-space: nowrap; overflow: hidden;
 }
-.star-disp-bg { color: var(--border); width: 100%; }
-.star-disp-fg { color: var(--accent); width: 0; }
+.star-disp-bg {
+  color: #000;
+  filter: grayscale(1) brightness(0);
+  opacity: 0.9;
+  width: 100%;
+}
+.star-disp-fg {
+  color: var(--accent);
+  filter: none;
+  width: 0;
+}
 .star-disp-symbol { display: inline-block; width: 1em; max-width: none; }
 
 /* Comments */
