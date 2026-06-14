@@ -23,8 +23,13 @@ personal-cinelog/
 ├── models.py                 # SQLAlchemy 모델
 ├── database.py               # DB 초기화
 ├── requirements.txt
-├── install_autostart.sh      # macOS 로그인 시 자동 시작 등록 (launchd)
+├── install_autostart.sh      # (레거시) macOS 로그인 시 자동 시작 등록 (launchd)
 ├── run.sh                    # 수동 실행 스크립트
+├── launcher/                 # macOS 더블클릭 런처 (build.sh → Cinelog.app)
+│   ├── build.sh              # 빌드: applescript 컴파일 + 아이콘 적용
+│   ├── Cinelog.applescript   # 토글 런처 소스 (서버 켜짐 ↔ 꺼짐)
+│   ├── make_icon.py          # 앱 아이콘(다크 + 클래퍼보드) 생성
+│   └── seticon.swift         # 커스텀 아이콘 주입 (캐시 무시)
 ├── static/
 │   ├── css/style.css
 │   ├── js/app.js
@@ -77,19 +82,32 @@ python app.py
 
 ---
 
-## macOS 자동 시작 설정
+## macOS 더블클릭 런처
 
-로그인 시 자동 실행되도록 launchd에 등록:
+매번 터미널에서 `python app.py`를 치기 번거로우면 토글 앱을 빌드한다.
 
 ```bash
-bash install_autostart.sh
+bash launcher/build.sh    # 저장소 루트에 Cinelog.app 생성
 ```
 
-제거:
+- **Cinelog** 더블클릭 → 서버 켜짐(Terminal 창에 로그 표시) + 브라우저(localhost:5001) 자동 오픈
+- 다시 더블클릭 → 서버 꺼짐 + 창 닫힘 (켜짐 ↔ 꺼짐 토글)
+- `.env`의 `TMDB_ACCESS_TOKEN` 등을 자동 로드
+- Terminal 창 존재 여부 = 서버 실행 중 여부
+- Dock 고정: `Cinelog.app`을 Dock(구분선 왼쪽)으로 드래그
+- 첫 실행 시 macOS가 "Terminal 제어" 권한을 물으면 허용
+
+> **끄기는 아이콘을 다시 클릭**한다 (경고창 없이 종료 + 창 닫힘). Terminal 창을 빨간 버튼/⌘W로 직접 닫으면 "실행 중 프로세스 종료" 확인창이 뜰 수 있다 — 이는 Terminal 기본 동작이며, 끄려면 Terminal ▸ 설정 ▸ 프로파일 ▸ (사용 중인 프로파일) ▸ 셸 ▸ "종료 전 확인 → 없음"으로 변경.
+
+> `Cinelog.app`은 빌드 산출물이라 git에 포함하지 않는다 — `launcher/`의 소스로 언제든 재생성.
+
+### (레거시) 로그인 시 자동 시작
+
+항상 켜두려면 launchd 등록도 가능하나, 위 더블클릭 런처를 권장한다.
 
 ```bash
-launchctl unload ~/Library/LaunchAgents/com.cinelog.app.plist
-rm ~/Library/LaunchAgents/com.cinelog.app.plist
+bash install_autostart.sh    # 등록
+launchctl unload ~/Library/LaunchAgents/com.cinelog.app.plist && rm ~/Library/LaunchAgents/com.cinelog.app.plist   # 제거
 ```
 
 ---

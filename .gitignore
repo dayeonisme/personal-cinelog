@@ -37,6 +37,7 @@ AGENTS.md
 .DS_Store
 .AppleDouble
 .LSOverride
+*.app/
 
 # IDE
 .vscode/
