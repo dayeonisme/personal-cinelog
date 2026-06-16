@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# Pre-commit hook: block secrets, personal paths, private project references, and local data.
+# Install: ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
+
+set -euo pipefail
+
+FAIL=0
+
+red() { printf '\033[31m%s\033[0m\n' "$*"; }
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACMRT)
+
+check_staged_file() {
+    local label="$1"
+    local pattern="$2"
+    if printf '%s\n' "$STAGED" | grep -qE "$pattern"; then
+        red "BLOCKED FILE: $label"
+        FAIL=1
+    fi
+}
+
+check_staged_file ".env contains credentials and must not be committed." '^\.env($|[.])'
+check_staged_file "credential JSON files must not be committed." '(^|/)(credentials|credentials_info|token|service_account)\.json$'
+check_staged_file "session/cookie files must not be committed." '(^sessions/|toss_session\.json$|naver_cookies\.json$)'
+check_staged_file "database files may contain personal data." '\.(db|sqlite|sqlite3)$'
+check_staged_file "data/ files may contain personal data." '^data/[^.]'
+
+DIFF=$(git diff --cached --unified=0 -- . ':!scripts/pre-commit' ':!tests/test_pre_commit_hook.py')
+
+check_pattern() {
+    local label="$1"
+    local pattern="$2"
+    if printf '%s\n' "$DIFF" | grep -qE "^\+.*(${pattern})"; then
+        red "SENSITIVE DATA: $label detected in staged changes."
+        FAIL=1
+    fi
+}
+
+REAL_NAME='PRIVATE_NAME'
+
+check_pattern "local home path" '(/Users/[^[:space:]"'"'"']+|C:\\Users\\[^[:space:]\\]+)'
+check_pattern "local username" 'private-user-pattern'
+check_pattern "real name" "$REAL_NAME"
+check_pattern "private housing-project reference" '(apply[[:space:]_-]*home[[:space:]_-]*watch|Apply(Home)?/LH|LH[[:space:]]+subscription)'
+check_pattern "Telegram bot token" '[0-9]{8,}:[A-Za-z0-9_-]{20,}'
+check_pattern "Telegram chat id" 'TELEGRAM_CHAT_ID[^[:space:]]*[[:space:]]*[=:][^[:space:]]*[1-9][0-9]{6,}'
+check_pattern "Google spreadsheet id" '(SPREADSHEET_ID|GOOGLE_SPREADSHEET_ID).*([A-Za-z0-9_-]{35,}|1LX[A-Za-z0-9_-]{30,})'
+check_pattern "lottery account id" 'DHLOTTERY_ID[[:space:]]*=[[:space:]]*[^<y[:space:]][^[:space:]]{2,}'
+check_pattern "WatchaPedia user URL" 'pedia[.]watcha[.]com/.*/users/[A-Za-z0-9_-]{6,}'
+check_pattern "generic API key or token" '(API_KEY|BOT_TOKEN|ACCESS_TOKEN|SECRET_KEY|CLIENT_SECRET)[[:space:]]*=[[:space:]]*["'"'"']?[A-Za-z0-9_./+-]{35,}'
+check_pattern "private key" '"private_key"[[:space:]]*:[[:space:]]*"-----BEGIN'
+
+if [[ $FAIL -eq 1 ]]; then
+    echo ""
+    red "Commit blocked. Remove the items above before committing."
+    echo "If a match is a false positive, refine scripts/pre-commit."
+    exit 1
+fi
+
+exit 0
