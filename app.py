@@ -607,4 +607,8 @@ def _upsert_comment_template(name):
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    # HOST=0.0.0.0 으로 실행하면 같은 와이파이의 다른 기기(휴대폰 등)에서도 접속 가능합니다.
+    host = os.environ.get('HOST', '127.0.0.1')
+    port = int(os.environ.get('PORT', '5001'))
+    debug = os.environ.get('FLASK_DEBUG', '1') == '1'
+    app.run(host=host, port=port, debug=debug)

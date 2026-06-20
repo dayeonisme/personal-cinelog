@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cinelog</title>
-<link rel="stylesheet" href="/static/css/style.css?v=20260613-detail-delete-actions">
+<link rel="stylesheet" href="/static/css/style.css?v=20260614-rating-name-noemoji">
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 </head>
 <body>
@@ -56,6 +56,9 @@
           <option value="hashtag">해시태그</option>
         </select>
         <input id="home-search-input" type="text" placeholder="검색어를 입력하세요..." class="search-input">
+        <button id="home-search-clear" class="search-clear-btn" type="button" style="display:none" aria-label="검색어 지우기">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
         <button id="home-search-btn" class="search-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </button>
@@ -96,6 +99,9 @@
           <option value="hashtag">해시태그</option>
         </select>
         <input id="review-search-input" type="text" placeholder="검색어를 입력하세요..." class="search-input">
+        <button id="review-search-clear" class="search-clear-btn" type="button" style="display:none" aria-label="검색어 지우기">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
         <button id="review-search-btn" class="search-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </button>
@@ -135,6 +141,9 @@
           <option value="hashtag">해시태그</option>
         </select>
         <input id="watchlist-search-input" type="text" placeholder="검색어를 입력하세요..." class="search-input">
+        <button id="watchlist-search-clear" class="search-clear-btn" type="button" style="display:none" aria-label="검색어 지우기">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
         <button id="watchlist-search-btn" class="search-btn">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
         </button>
@@ -304,6 +313,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=20260613-detail-delete-actions"></script>
+<script src="/static/js/app.js?v=20260614-rating-name-noemoji"></script>
 </body>
 </html>

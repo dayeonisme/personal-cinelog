@@ -231,6 +231,15 @@ img { display: block; }
 }
 .search-btn:hover { color: var(--accent); }
 
+.search-clear-btn {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+.search-clear-btn:hover { color: var(--accent); }
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -661,6 +670,10 @@ img { display: block; }
 }
 .movie-detail-section.review .movie-detail-section-title .badge { color: var(--review-border); border-color: var(--review-border); }
 .movie-detail-section.watchlist .movie-detail-section-title .badge { color: var(--watchlist-border); border-color: var(--watchlist-border); }
+.movie-detail-date-line {
+  font-family: var(--font-mono); font-size: 13px; color: var(--text-dim);
+  margin-top: -8px; margin-bottom: 18px;
+}
 .movie-detail-section-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .movie-detail-edit-btn {
   flex-shrink: 0; font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em;

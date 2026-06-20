@@ -94,7 +94,7 @@ function buildRatingsHtml(ratings) {
     const emoji = r.emoji || '⭐';
     const stars = renderStarsHtml(r.value || 0, emoji);
     return `<div class="rating-chip">
-      <span class="rating-chip-name">${escHtml(emoji)} ${escHtml(displayRatingName(r.name))}</span>
+      <span class="rating-chip-name">${escHtml(displayRatingName(r.name))}</span>
       <span class="rating-chip-stars">${stars}</span>
       <span class="rating-chip-value">${r.value != null ? r.value.toFixed(1) : '–'}</span>
     </div>`;
@@ -147,6 +147,7 @@ function hideModal(id) { $(id).style.display = 'none'; }
 
 // ── Navigation ─────────────────────────────────────────────────
 function navigateTo(page, opts = {}) {
+  if (state.currentPage !== page) resetPageSearch(state.currentPage);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.gnb-btn').forEach(b => b.classList.remove('active'));
   $(`page-${page}`).classList.add('active');
@@ -451,6 +452,7 @@ $('modal-name-error-close').onclick = () => hideModal('modal-name-error');
 // ══════════════════════════════════════════════════════════════
 function navigateToMovie(movieId, opts = {}) {
   if (state.currentPage !== 'movie') state.movieDetailFrom = state.currentPage;
+  resetPageSearch(state.currentPage);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.gnb-btn').forEach(b => b.classList.remove('active'));
   $('page-movie').classList.add('active');
@@ -560,6 +562,10 @@ function buildMovieDetailEntrySection(kind, title, entry) {
           <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
           <button type="button" class="movie-detail-delete-btn" onclick="confirmDelete(${entry.id})">삭제</button>
         </div>
+      </div>
+      <div class="movie-detail-date-line">
+        등록 ${fmtDate(entry.created_at)}
+        ${entry.updated_at !== entry.created_at ? ` · 마지막 수정 ${fmtDate(entry.updated_at)}` : ''}
       </div>
       ${ratingsHtml}
       ${commentsHtml}
@@ -1447,6 +1453,34 @@ $('watchlist-search-btn').onclick = () => {
 };
 $('watchlist-search-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') { $('watchlist-search-btn').click(); }
+});
+
+// ── 검색어 지우기(X) & 페이지 이탈 시 초기화 ──
+const SEARCH_PAGES = ['home', 'review', 'watchlist'];
+const reloadPage = page => {
+  if (page === 'home') loadHome(true);
+  else if (page === 'review') loadReviews(true);
+  else if (page === 'watchlist') loadWatchlist(true);
+};
+function updateSearchClear(page) {
+  const input = $(`${page}-search-input`);
+  const clearBtn = $(`${page}-search-clear`);
+  if (!input || !clearBtn) return;
+  clearBtn.style.display = input.value ? 'flex' : 'none';
+}
+function resetPageSearch(page, { reload = false } = {}) {
+  if (!SEARCH_PAGES.includes(page)) return;
+  const input = $(`${page}-search-input`);
+  if (input) input.value = '';
+  state[`${page}Search`] = '';
+  updateSearchClear(page);
+  if (reload) reloadPage(page);
+}
+SEARCH_PAGES.forEach(page => {
+  const input = $(`${page}-search-input`);
+  const clearBtn = $(`${page}-search-clear`);
+  if (input) input.addEventListener('input', () => updateSearchClear(page));
+  if (clearBtn) clearBtn.onclick = () => resetPageSearch(page, { reload: true });
 });
 
 // ══════════════════════════════════════════════════════════════
