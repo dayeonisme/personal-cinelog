@@ -34,9 +34,11 @@ def _get_or_create_tag():
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--commit", action="store_true")
-    ap.add_argument("--sleep", type=float, default=0.2)
+    ap.add_argument("--sleep", type=float, default=0.1)
     ap.add_argument("--limit", type=int)
-    ap.add_argument("--progress-every", type=int, default=50)
+    ap.add_argument("--progress-every", type=int, default=25)
+    ap.add_argument("--commit-every", type=int, default=200,
+                    help="N개 원작영화 처리마다 중간 커밋(중단/재실행 시 이어감)")
     args = ap.parse_args()
 
     with app.app_context():
@@ -62,15 +64,16 @@ def main() -> None:
                 api_calls += 1
                 if args.sleep:
                     time.sleep(args.sleep)
-            if not cache[key]:
-                continue
+            if cache[key]:
+                qualified += 1
+                for entry in untagged:
+                    entry.hashtags.append(tag)
+                    tagged += 1
+                if args.commit and args.commit_every and qualified % args.commit_every == 0:
+                    db.session.commit()
 
-            qualified += 1
-            for entry in untagged:
-                entry.hashtags.append(tag)
-                tagged += 1
-            if args.progress_every and qualified % args.progress_every == 0:
-                print(f"  진행: {checked} 영화 검토 / {tagged} 엔트리 태그")
+            if args.progress_every and checked % args.progress_every == 0:
+                print(f"  진행: {checked} 검토 / 원작 {qualified} / 태그 {tagged}", flush=True)
 
         if args.commit:
             db.session.commit()
