@@ -318,28 +318,58 @@ def collect_scrolling_movies(page, pause_seconds: float, stable_rounds: int) -> 
         else:
             stable_count = 0
 
-        page.evaluate("window.scrollBy(0, Math.floor(window.innerHeight * 0.85))")
-        page.mouse.wheel(0, 1800)
+        # 마지막 카드를 화면에 보이게 스크롤 → 실제 스크롤 컨테이너(내부 div든 window든)를
+        # 끝까지 밀어 다음 배치 로드를 트리거한다. window.scrollBy 는 내부 컨테이너를 못 밀 수 있음.
+        anchors = page.locator("a[title][href*='/contents/']")
+        anchor_total = anchors.count()
+        if anchor_total:
+            try:
+                last = anchors.nth(anchor_total - 1)
+                last.scroll_into_view_if_needed(timeout=3000)
+                # 마지막 카드 바로 아래로 한 번 더 밀어 lazy-load 트리거
+                last.hover(timeout=1000)
+                page.mouse.wheel(0, 2500)
+            except Exception:
+                pass
         time.sleep(pause_seconds)
 
     return list(collected.values())
 
 
+_EXTRACT_JS = """() => {
+  const out = [];
+  for (const a of document.querySelectorAll("a[title][href*='/contents/']")) {
+    const card = a.closest('li, article, div');
+    out.push({
+      href: a.getAttribute('href') || '',
+      title: a.getAttribute('title') || '',
+      anchorText: (a.innerText || '').trim(),
+      cardText: card ? (card.innerText || '').trim() : '',
+    });
+  }
+  return out;
+}"""
+
+
 def extract_visible_movies(page) -> list:
-    anchors = page.locator("a[title][href*='/contents/']")
+    # 카드마다 Playwright 왕복(느림/타임아웃) 대신 page.evaluate 한 번으로 전 카드 데이터 수집.
+    try:
+        cards = page.evaluate(_EXTRACT_JS)
+    except Exception:
+        return []
+
     movies = []
-    for index in range(anchors.count()):
-        anchor = anchors.nth(index)
-        href = anchor.get_attribute("href") or ""
-        anchor_title = anchor.get_attribute("title") or ""
+    for c in cards:
+        href = c.get("href") or ""
+        anchor_title = c.get("title") or ""
         if not is_movie_content_link(href, anchor_title):
             continue
 
         watcha_url = urljoin(page.url, href)
         watcha_content_id = parse_content_id(watcha_url)
 
-        anchor_text = anchor_title or anchor.inner_text(timeout=1000)
-        card_text = anchor.locator("xpath=ancestor::*[self::li or self::article or self::div][1]").inner_text(timeout=1000)
+        anchor_text = anchor_title or c.get("anchorText") or ""
+        card_text = c.get("cardText") or ""
         title = clean_title(anchor_text, card_text)
         if not title:
             continue
@@ -420,8 +450,88 @@ def collect_profile_collection(
     return rows
 
 
+def _capture_frograms_headers(page, kind: str, collection_url: str) -> dict:
+    """페이지를 한 번 열어 앱이 보내는 API 요청의 x-frograms-* / accept 헤더를 캡처한다.
+    device-identifier 등이 세션에 묶여 있으므로 하드코딩 대신 런타임 캡처가 안전하다."""
+    captured: dict = {}
+
+    def on_req(req):
+        u = req.url
+        if "/api/users/" in u and f"/{kind}" in u and not captured:
+            for k, v in req.headers.items():
+                lk = k.lower()
+                if lk.startswith("x-frograms") or lk == "accept":
+                    captured[k] = v
+
+    page.on("request", on_req)
+    page.goto(normalize_watchapedia_url(collection_url), wait_until="domcontentloaded")
+    page.wait_for_timeout(3500)
+    try:
+        page.remove_listener("request", on_req)
+    except Exception:
+        pass
+    return captured
+
+
+def collect_via_api(page, collection_url: str) -> list:
+    """Watcha 내부 API(next_uri 페이징)로 전량 수집. 스크롤보다 완전·안정."""
+    m = re.search(r"/users/([^/?#]+)/contents/movies/(ratings|wishes|doings)", collection_url)
+    if not m:
+        return []
+    uid, kind = m.group(1), m.group(2)
+
+    headers = _capture_frograms_headers(page, kind, collection_url)
+    ensure_logged_in(page)  # 세션 만료면 여기서 fail-fast(헤드리스/cron)
+    if not headers:
+        print("API 헤더 캡처 실패 — 스크롤로 폴백")
+        return []
+
+    base = "https://pedia.watcha.com"
+    uri = f"/api/users/{uid}/contents/movies/{kind}?size=100&order=recent"
+    raw = []
+    while uri:
+        resp = page.request.get(base + uri, headers=headers)
+        if resp.status != 200:
+            print(f"API {kind} status {resp.status} — 중단(수집 {len(raw)})")
+            break
+        result = (resp.json() or {}).get("result") or {}
+        raw.extend(result.get("result") or [])
+        uri = result.get("next_uri")
+
+    movies = []
+    for it in raw:
+        c = it.get("content") or {}
+        if c.get("content_type") not in (None, "movies"):
+            continue
+        code = c.get("code") or ""
+        if not code:
+            continue
+        rating = (it.get("user_content_action") or {}).get("rating")
+        movies.append(
+            ExportedMovie(
+                title=(c.get("title") or "").strip(),
+                year=str(c.get("year")) if c.get("year") else "",
+                rating=(rating / 2.0) if isinstance(rating, (int, float)) else None,
+                watcha_content_id=code,
+                watcha_url=f"https://pedia.watcha.com/ko/contents/{code}",
+            )
+        )
+    return unique_movies(movies)
+
+
 def collect_page_movies(page, url: str, pause_seconds: float, stable_rounds: int) -> list:
     print(f"Opening {url}")
+    # API 우선(완전·안정). 실패 시에만 스크롤 폴백.
+    try:
+        movies = collect_via_api(page, url)
+        if movies:
+            print(f"API 수집: {len(movies)} rows from {url}")
+            return movies
+        print("API 결과 없음 — 스크롤 폴백")
+    except SystemExit:
+        raise
+    except Exception as exc:
+        print(f"API 수집 예외({exc}) — 스크롤 폴백")
     page.goto(url, wait_until="domcontentloaded")
     ensure_logged_in(page)
     page.wait_for_load_state("networkidle")
@@ -436,8 +546,9 @@ def main() -> None:
     parser.add_argument("--ratings-url", help="WatchaPedia URL for rated movies.")
     parser.add_argument("--watchlist-url", help="WatchaPedia URL for watchlist movies.")
     parser.add_argument("--out-dir", type=Path, default=Path("data"))
-    parser.add_argument("--pause-seconds", type=float, default=1.25)
-    parser.add_argument("--stable-rounds", type=int, default=3)
+    # 추출이 빨라져 다음 배치 로딩 전에 조기 종료되지 않도록 인내심을 키운다.
+    parser.add_argument("--pause-seconds", type=float, default=2.0)
+    parser.add_argument("--stable-rounds", type=int, default=10)
     parser.add_argument(
         "--headless",
         action="store_true",
