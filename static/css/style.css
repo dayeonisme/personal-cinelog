@@ -1002,3 +1002,30 @@ img { display: block; }
 .md-content blockquote { border-left: 2px solid var(--border-gold); padding-left: 14px; color: var(--text-muted); font-style: italic; margin: 10px 0; }
 .md-content code { font-family: var(--font-mono); font-size: 13px; background: var(--bg-surface); padding: 1px 5px; border: 1px solid var(--border); }
 .md-content pre code { display: block; padding: 12px; overflow-x: auto; }
+
+/* GNB 왓챠 동기화 버튼 + toast */
+.gnb-sync-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--text-muted); padding: 6px; margin-left: 4px;
+  display: flex; align-items: center; transition: color 0.15s;
+}
+.gnb-sync-btn:hover { color: var(--accent); }
+.gnb-sync-btn:disabled { cursor: default; }
+.gnb-sync-icon { width: 21px; height: 21px; stroke: currentColor; display: block; }
+.gnb-sync-btn.syncing { color: var(--accent); }
+.gnb-sync-btn.syncing .gnb-sync-icon { animation: cl-spin 1s linear infinite; }
+@keyframes cl-spin { to { transform: rotate(360deg); } }
+
+.toast {
+  position: fixed; left: 50%; bottom: 28px;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--bg-card); color: var(--text);
+  border: 1px solid var(--border-gold); border-radius: 2px;
+  padding: 12px 20px; font-size: 14px; font-family: var(--font-sans);
+  box-shadow: var(--shadow); z-index: 2000;
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.ok { border-color: var(--accent); }
+.toast.err { border-color: var(--accent-err); }

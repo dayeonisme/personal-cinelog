@@ -26,6 +26,16 @@ done
 sudo systemctl daemon-reload
 sudo systemctl enable --now cinelog-watcha-sync.timer
 
+echo "==> GNB 수동 동기화 버튼용 sudoers (gunicorn 유저가 무비번으로 서비스 start)"
+SUDOERS_LINE="$USER ALL=(root) NOPASSWD: /usr/bin/systemctl start --no-block cinelog-watcha-sync.service"
+echo "$SUDOERS_LINE" | sudo tee /etc/sudoers.d/cinelog-watcha >/dev/null
+sudo chmod 440 /etc/sudoers.d/cinelog-watcha
+if sudo visudo -cf /etc/sudoers.d/cinelog-watcha >/dev/null 2>&1; then
+  echo "  sudoers OK"
+else
+  echo "  sudoers 검증 실패 — 제거"; sudo rm -f /etc/sudoers.d/cinelog-watcha
+fi
+
 echo ""
 echo "==> 다음 실행 예정"
 systemctl list-timers cinelog-watcha-sync.timer --no-pager || true

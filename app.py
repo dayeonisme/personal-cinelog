@@ -2,6 +2,7 @@ import os
 import re
 import json
 import requests
+import subprocess
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
@@ -252,6 +253,63 @@ def index():
 @app.route('/static/uploads/<filename>')
 def uploaded_file(filename):
     return send_from_directory(UPLOAD_FOLDER, filename)
+
+
+# ── 왓챠 수동 동기화 (systemd 서비스 트리거) ──────────────────────────────────
+WATCHA_SYNC_SERVICE = 'cinelog-watcha-sync.service'
+
+
+def _systemctl(args):
+    """systemctl 호출(읽기 전용은 sudo 불필요). 실패해도 예외 대신 결과 객체 반환."""
+    try:
+        return subprocess.run(
+            ['systemctl', *args], capture_output=True, text=True, timeout=10
+        )
+    except Exception:
+        return None
+
+
+@app.route('/api/watcha/sync', methods=['POST'])
+def start_watcha_sync():
+    """버튼 → 동기화 서비스를 비차단으로 시작. 이미 실행 중이면 409.
+    배포 환경에서만 동작(systemd + sudoers). 로컬/미배포면 503."""
+    active = _systemctl(['is-active', WATCHA_SYNC_SERVICE])
+    if active is None:
+        return jsonify({'status': 'unavailable', 'detail': 'systemd 환경 아님'}), 503
+    if active.stdout.strip() in ('active', 'activating'):
+        return jsonify({'status': 'already_running'}), 409
+    try:
+        r = subprocess.run(
+            ['sudo', '-n', 'systemctl', 'start', '--no-block', WATCHA_SYNC_SERVICE],
+            capture_output=True, text=True, timeout=10,
+        )
+    except Exception as exc:
+        return jsonify({'status': 'error', 'detail': str(exc)[:300]}), 500
+    if r.returncode != 0:
+        return jsonify({'status': 'error', 'detail': (r.stderr or r.stdout)[:300]}), 500
+    return jsonify({'status': 'started'})
+
+
+@app.route('/api/watcha/sync/status')
+def watcha_sync_status():
+    active = _systemctl(['is-active', WATCHA_SYNC_SERVICE])
+    if active is None:
+        return jsonify({'available': False, 'running': False})
+    state = active.stdout.strip()
+    props = {}
+    show = _systemctl(['show', WATCHA_SYNC_SERVICE, '-p', 'Result', '-p', 'InactiveEnterTimestamp'])
+    if show is not None:
+        for line in show.stdout.splitlines():
+            if '=' in line:
+                key, value = line.split('=', 1)
+                props[key] = value
+    return jsonify({
+        'available': True,
+        'running': state in ('active', 'activating'),
+        'state': state,
+        'result': props.get('Result', ''),
+        'finished_at': props.get('InactiveEnterTimestamp', ''),
+    })
 
 
 # ── Movie Search (TMDb) ───────────────────────────────────────────────────────

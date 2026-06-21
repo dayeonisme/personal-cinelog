@@ -1503,3 +1503,63 @@ function escAttr(s) { return escHtml(s); }
 // 쌓이므로, 뒤로가기를 누르면 이 항목으로 돌아오기 전까지는 앱을 벗어나지 않음)
 history.replaceState({ view: 'page', page: 'home' }, '', '');
 loadHome(true);
+
+// ══════════════════════════════════════════════════════════════
+// 왓챠 수동 동기화 (GNB 버튼)
+// ══════════════════════════════════════════════════════════════
+function showToast(msg, kind = '') {
+  const t = $('toast');
+  if (!t) return;
+  t.textContent = msg;
+  t.className = 'toast show' + (kind ? ' ' + kind : '');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.className = 'toast'; }, 4500);
+}
+
+let watchaSyncPoll = null;
+
+function setSyncBtn(running) {
+  const b = $('gnb-watcha-sync');
+  if (!b) return;
+  b.classList.toggle('syncing', running);
+  b.disabled = running;
+  b.title = running ? '왓챠 동기화 중…' : '왓챠 동기화';
+}
+
+async function pollWatchaSync() {
+  let s;
+  try { s = await API('/api/watcha/sync/status'); } catch (e) { return; }
+  setSyncBtn(!!s.running);
+  if (s.running) {
+    if (!watchaSyncPoll) watchaSyncPoll = setInterval(pollWatchaSync, 5000);
+    return;
+  }
+  if (watchaSyncPoll) {
+    clearInterval(watchaSyncPoll);
+    watchaSyncPoll = null;
+    const ok = s.result === 'success';
+    showToast(ok ? '왓챠 동기화 완료 🎬' : '왓챠 동기화 실패 (' + (s.result || '오류') + ')', ok ? 'ok' : 'err');
+    if (ok) loadHome(true);
+  }
+}
+
+async function startWatchaSync() {
+  const b = $('gnb-watcha-sync');
+  if (b && b.disabled) return;
+  setSyncBtn(true);
+  showToast('왓챠 동기화 시작… (몇 분 걸려요)');
+  let res;
+  try { res = await API('/api/watcha/sync', { method: 'POST' }); }
+  catch (e) { setSyncBtn(false); showToast('동기화 요청 실패', 'err'); return; }
+  if (res.status === 'unavailable') { setSyncBtn(false); showToast('이 환경에선 동기화 불가(배포 서버 전용)', 'err'); return; }
+  if (res.status === 'error') { setSyncBtn(false); showToast('동기화 시작 실패: ' + (res.detail || ''), 'err'); return; }
+  if (res.status === 'already_running') showToast('이미 동기화 중…');
+  if (!watchaSyncPoll) watchaSyncPoll = setInterval(pollWatchaSync, 5000);
+  pollWatchaSync();
+}
+
+(() => {
+  const b = $('gnb-watcha-sync');
+  if (b) b.addEventListener('click', startWatchaSync);
+  pollWatchaSync();  // 진입 시 이미 도는 중이면(예: 4am 자동) 상태 반영
+})();
