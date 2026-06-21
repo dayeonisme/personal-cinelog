@@ -49,9 +49,14 @@ echo "[$(date -Is)] import 시작 (--commit)"
 
 # 새로 들어온 bare 영화(포스터 없음)에 TMDb 메타데이터(포스터/감독/배우/러닝타임/장르) 보강.
 # imdb_id LIKE 'watcha:%' AND poster_url IS NULL 만 타겟 → 기존 보강분은 건드리지 않음.
-echo "[$(date -Is)] TMDb 보강 (신규 영화)"
+echo "[$(date -Is)] TMDb 보강 1차 (한국어 제목)"
 "$PY" tools/enrich_tmdb_metadata.py --only-missing-poster --commit --sleep 0.3 || \
   echo "  (보강 일부 실패 — TMDb 일시 오류일 수 있음, 다음 실행 때 재시도됨)"
+
+# 1차에서 못 잡은 잔여는 왓챠 content API 의 원제+연도로 재매칭(브라우저 필요 → xvfb).
+echo "[$(date -Is)] TMDb 보강 2차 (왓챠 원제 기반)"
+xvfb-run -a "$PY" tools/enrich_via_watcha_detail.py --storage-state "$STATE" --commit --sleep 0.2 || \
+  echo "  (원제 보강 일부 실패 — 다음 실행 때 재시도됨)"
 
 # 원작(소설/만화 등) 있는 작품의 신규 엔트리에 '원작존재' 해시태그 백필(멱등).
 echo "[$(date -Is)] 원작존재 해시태그 백필"

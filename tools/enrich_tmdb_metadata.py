@@ -118,8 +118,16 @@ def choose_match(title: str, year: Optional[str], results: Iterable[Dict]) -> Op
         if not normalized_match and not canonical_match:
             continue
 
-        if year and item_year == year:
-            score = 100
+        year_match = bool(year) and bool(item_year) and item_year == year
+        if year and item_year and not year_match:
+            # 지역 개봉 연도 차이(±1)는 같은 작품으로 본다. 단 정확 일치가 더 높은 점수.
+            try:
+                year_match = abs(int(item_year) - int(year)) <= 1
+            except (TypeError, ValueError):
+                year_match = False
+
+        if year_match:
+            score = 100 if item_year == year else 96
             reason = "exact_title_year"
         elif canonical_match and not normalized_match:
             score = 90
