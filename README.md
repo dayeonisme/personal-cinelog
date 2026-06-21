@@ -1,17 +1,106 @@
 # personal-cinelog
-본 영화 평가 및 보고싶어요 목록 관리 데스크탑 웹앱.
-영화 검색(TMDb) → 별점·코멘트 기록 → SQLite 로컬 저장 → localhost에서 실행.
+
+개인용 영화 평가·보고싶어요 기록 웹앱.
+영화 검색(TMDb) → 별점·코멘트 기록 → SQLite 저장. 왓챠피디아의 내 평가를 가져와 동기화한다.
+
+**이제는 Mac 에서 앱 버튼으로 서버를 켜는 방식이 아니라, GCP 상시 서버에 배포하고 Tailscale 사설망으로 PC·모바일 어디서나 접속한다.** (로컬 `python app.py` 방식은 개발용으로만 남겨둔다.)
+
+---
+
+## 접속 방식
+
+- **배포 (권장·기본)** — GCP Always Free VM 에 gunicorn + systemd 로 **상시 구동**. **Tailscale 사설망**으로만 접근하므로 공개 인터넷에 노출되지 않고, PC·아이폰에서 동일하게 `http://<VM의 Tailscale IP>:5001` 로 접속한다. 컴퓨터를 꺼도 폰에서 접속·기록 가능.
+  - 설정/운영 전체 절차는 **[`deploy/README.md`](deploy/README.md)** 참고.
+- **로컬 개발** — `python app.py` → `http://localhost:5001` (아래 [로컬 개발 실행](#로컬-개발-실행)).
+
+> **데이터 정본은 배포 VM 한 곳.** 로컬에서 따로 실행하면 DB 가 갈라지므로, 평소엔 Mac 에서도 Tailscale 주소로 접속한다.
 
 ---
 
 ## 주요 기능
 
-- 영화별 `평가`와 `보고싶어요`를 별도로 등록하고 영화 상세에서 함께 확인
-- 기본 평점과 커스텀 별점 모듈 지원
-- 커스텀 별점 이모지 선택기 지원
-- Markdown 코멘트와 이미지 첨부 지원
-- 해시태그 자동완성 및 검색 지원
-- TMDb 키워드 기반 `원작존재` 해시태그 자동 부여
+- 영화별 `평가`와 `보고싶어요`를 별도로 등록하고 상세에서 함께 확인
+- 기본 평점 + 커스텀 별점 모듈, 커스텀 이모지 별점 선택기
+- Markdown 코멘트와 이미지 첨부
+- 해시태그 자동완성·검색, TMDb 키워드 기반 `원작존재` 해시태그 자동 부여
+- 홈에서는 **한글** 영화명·감독명, 상세에서는 **원제·원어 감독**도 다른 정보와 함께 표기
+- **모바일 반응형 UI** — 하단 탭바(평가·홈·보고싶어요), 2열 포스터 그리드, 카드에 제목·연도·별점 상시 표시
+- **왓챠피디아 연동** — 내 평가/보고싶어요를 가져와 TMDb 메타데이터(포스터·감독·배우·러닝타임·장르)로 보강
+  - GNB 의 **↻ 버튼으로 수동 동기화** (서버에서 실행 → PC·모바일 어디서 눌러도 동작)
+  - **매일 새벽 자동 동기화** (systemd 타이머)
+
+---
+
+## 배포 (GCP + Tailscale)
+
+상시 접속을 위해 GCP Always Free e2-micro VM 에 올리고 **Tailscale 사설망**으로 접근한다.
+공개 인터넷에 노출하지 않으므로 별도 로그인/HTTPS 없이 **내 기기에서만** 접속한다.
+
+- gunicorn + systemd(`deploy/cinelog.service`) 로 상시 구동·부팅 자동 시작·크래시 자동 재시작
+- 앱을 **Tailscale IP 에만 바인딩** → 외부 IP 로는 보이지 않음(이중 안전장치로 방화벽 5001 미개방)
+- e2-micro(1GB) 보호용 swap 자동 생성
+
+요약 (자세한 절차·보안 체크리스트는 [`deploy/README.md`](deploy/README.md)):
+
+```bash
+# VM 안에서 — Tailscale 설치 후
+git clone https://github.com/dayeonisme/personal-cinelog.git ~/movie-review
+cd ~/movie-review
+bash deploy/setup-vm.sh                 # venv + 의존성 + swap + systemd 서비스 등록
+
+# Mac 에서 — DB·.env 전송 (gitignore 라 git 에 없음)
+deploy/push-data.sh <VM이름> <zone>
+```
+
+폰: App/Play 스토어에서 **Tailscale** 설치 → 같은 계정 로그인 → 브라우저로 `http://<VM의 Tailscale IP>:5001` → Safari "홈 화면에 추가" 하면 앱처럼 사용.
+
+---
+
+## 왓챠피디아 동기화
+
+왓챠피디아의 내 평가·보고싶어요를 가져와 Cinelog DB 에 반영하고 TMDb 로 보강한다.
+
+- **세션 이식** — 포터블 `watcha_state.json`(쿠키)로 OS 무관하게 이식. Mac 에서 `tools/dump_watcha_state.py` 로 생성 후 VM 으로 복사. (브라우저 프로필 복사는 OS 키체인 암호화로 불가)
+- **파이프라인** (`deploy/watcha-sync.sh`): `export(왓챠 내부 API) → import → TMDb 보강 → 원작존재 태그`.
+- **자동** — `deploy/cinelog-watcha-sync.timer` 가 매일 04:00 KST 실행. 설정: `bash deploy/setup-watcha-sync.sh`.
+- **수동** — 앱 GNB 의 ↻ 버튼 → `POST /api/watcha/sync` 가 systemd 서비스를 비차단으로 트리거. 상태는 폴링으로 표시(완료 시 토스트 + 홈 새로고침).
+
+주요 도구 (`tools/`):
+
+| 파일 | 역할 |
+|------|------|
+| `dump_watcha_state.py` | (Mac) 로그인 세션 → 포터블 `watcha_state.json` 추출 |
+| `export_watchapedia.py` | 왓챠 내부 API 로 평가/보고싶어요 수집 → CSV |
+| `import_watcha_csv.py` | CSV → DB |
+| `enrich_tmdb_metadata.py` / `enrich_via_watcha_detail.py` | TMDb 메타데이터 보강(한국어 제목/감독 보존) |
+| `fix_watcha_korean.py` | 원어로 덮인 한국어 제목/감독 보정 |
+| `backfill_original_source_tag.py` | `원작존재` 태그 백필 |
+
+---
+
+## 로컬 개발 실행
+
+배포 없이 로컬에서만 돌릴 때.
+
+```bash
+git clone https://github.com/dayeonisme/personal-cinelog.git
+cd personal-cinelog
+pip3 install -r requirements.txt
+export TMDB_ACCESS_TOKEN="발급받은_Read_Access_Token"   # 또는 export TMDB_API_KEY="..."
+python app.py        # http://localhost:5001
+```
+
+TMDb 키 발급: [TMDb API 문서](https://developer.themoviedb.org/docs/getting-started) 에서 계정 생성 후 API Read Access Token(또는 v3 API Key) 발급. 영구 적용은 `~/.zshrc` 또는 `.env` 에 저장.
+
+### (레거시) macOS 더블클릭 런처
+
+> 이전 방식. 이제는 GCP 배포로 상시 접속하므로 **로컬 개발 편의용**으로만 둔다.
+
+```bash
+bash launcher/build.sh    # 저장소 루트에 Cinelog.app 생성
+```
+
+`Cinelog` 더블클릭 → 로컬 서버 켜짐(localhost:5001 자동 오픈) ↔ 다시 클릭 → 꺼짐. (`Cinelog.app` 은 빌드 산출물이라 git 에 미포함, `launcher/` 소스로 재생성.)
 
 ---
 
@@ -19,104 +108,25 @@
 
 ```
 personal-cinelog/
-├── app.py                    # Flask 앱 & REST API
+├── app.py                    # Flask 앱 & REST API (왓챠 동기화 트리거 포함)
 ├── models.py                 # SQLAlchemy 모델
 ├── database.py               # DB 초기화
 ├── requirements.txt
-├── install_autostart.sh      # (레거시) macOS 로그인 시 자동 시작 등록 (launchd)
-├── run.sh                    # 수동 실행 스크립트
-├── launcher/                 # macOS 더블클릭 런처 (build.sh → Cinelog.app)
-│   ├── build.sh              # 빌드: applescript 컴파일 + 아이콘 적용
-│   ├── Cinelog.applescript   # 토글 런처 소스 (서버 켜짐 ↔ 꺼짐)
-│   ├── make_icon.py          # 앱 아이콘(다크 + 클래퍼보드) 생성
-│   └── seticon.swift         # 커스텀 아이콘 주입 (캐시 무시)
+├── deploy/                   # GCP + Tailscale 배포 + 왓챠 자동 동기화
+│   ├── README.md             # 배포 전체 절차 + 보안 체크리스트
+│   ├── setup-vm.sh           # VM 셋업(venv·swap·systemd)
+│   ├── cinelog.service       # gunicorn systemd 서비스(Tailscale IP 바인딩)
+│   ├── push-data.sh          # Mac → VM 데이터(DB·이미지) 전송
+│   ├── watcha-sync.sh        # 왓챠 동기화 파이프라인
+│   ├── setup-watcha-sync.sh  # Chromium 설치 + 동기화 타이머·sudoers 등록
+│   └── cinelog-watcha-sync.{service,timer}
+├── tools/                    # 왓챠 수집·TMDb 보강·교정 스크립트
+├── launcher/                 # (레거시) macOS 더블클릭 런처 소스
 ├── static/
 │   ├── css/style.css
 │   ├── js/app.js
-│   └── uploads/              # 첨부 이미지 저장 폴더 (gitignored)
-└── templates/
-    └── index.html
-```
-
----
-
-## 설정 전 필수 사항
-
-**TMDb API 키 발급**
-
-[TMDb API 문서](https://developer.themoviedb.org/docs/getting-started) 기준으로 계정을 만들고 API Read Access Token 또는 API Key를 발급합니다.
-
----
-
-## 설치 및 실행
-
-### Step 1 — 클론 및 의존성 설치
-
-```bash
-git clone https://github.com/dayeonisme/personal-cinelog.git
-cd personal-cinelog
-pip3 install -r requirements.txt
-```
-
-### Step 2 — 환경 변수 설정
-
-```bash
-export TMDB_ACCESS_TOKEN="발급받은_Read_Access_Token"
-```
-
-또는 v3 API Key를 사용할 수 있습니다.
-
-```bash
-export TMDB_API_KEY="발급받은_API_Key"
-```
-
-영구 적용하려면 `~/.zshrc`에 추가.
-
-### Step 3 — 실행
-
-```bash
-python app.py
-```
-
-브라우저에서 **http://localhost:5001** 접속.
-
----
-
-## macOS 더블클릭 런처
-
-매번 터미널에서 `python app.py`를 치기 번거로우면 토글 앱을 빌드한다.
-
-```bash
-bash launcher/build.sh    # 저장소 루트에 Cinelog.app 생성
-```
-
-- **Cinelog** 더블클릭 → 서버 켜짐(Terminal 창에 로그 표시) + 브라우저(localhost:5001) 자동 오픈
-- 다시 더블클릭 → 서버 꺼짐 + 창 닫힘 (켜짐 ↔ 꺼짐 토글)
-- `.env`의 `TMDB_ACCESS_TOKEN` 등을 자동 로드
-- Terminal 창 존재 여부 = 서버 실행 중 여부
-- Dock 고정: `Cinelog.app`을 Dock(구분선 왼쪽)으로 드래그
-- 첫 실행 시 macOS가 "Terminal 제어" 권한을 물으면 허용
-
-> **끄기는 아이콘을 다시 클릭**한다 (경고창 없이 종료 + 창 닫힘). Terminal 창을 빨간 버튼/⌘W로 직접 닫으면 "실행 중 프로세스 종료" 확인창이 뜰 수 있다 — 이는 Terminal 기본 동작이며, 끄려면 Terminal ▸ 설정 ▸ 프로파일 ▸ (사용 중인 프로파일) ▸ 셸 ▸ "종료 전 확인 → 없음"으로 변경.
-
-> `Cinelog.app`은 빌드 산출물이라 git에 포함하지 않는다 — `launcher/`의 소스로 언제든 재생성.
-
-### (레거시) 로그인 시 자동 시작
-
-항상 켜두려면 launchd 등록도 가능하나, 위 더블클릭 런처를 권장한다.
-
-```bash
-bash install_autostart.sh    # 등록
-launchctl unload ~/Library/LaunchAgents/com.cinelog.app.plist && rm ~/Library/LaunchAgents/com.cinelog.app.plist   # 제거
-```
-
----
-
-## 수동 실행
-
-```bash
-# 환경 변수 포함해서 실행
-TMDB_ACCESS_TOKEN="발급받은_Read_Access_Token" python app.py
+│   └── uploads/              # 첨부 이미지 (gitignored)
+└── templates/index.html
 ```
 
 ---
@@ -134,20 +144,21 @@ Movie
 - **RatingTemplate** — 이전에 등록한 커스텀 별점명 목록 (재사용 드롭다운용)
 - **CommentTemplate** — 이전에 등록한 커스텀 코멘트명 목록 (재사용 드롭다운용)
 
+`Movie` 는 한국어 표시명(`title_ko`/`director_ko`)과 원어(`title_en`/`director_en`, 원제·원어 감독)를 함께 보관한다.
+
 ---
 
 ## 해시태그 정책
 
 - 해시태그 이름에는 공백을 저장하지 않습니다. 예: `원작 존재` → `원작존재`
 - `원작존재`
-  - 새 항목 등록 시 TMDb `/movie/{id}/keywords`를 조회해 자동 추가합니다.
+  - 새 항목 등록 시 TMDb `/movie/{id}/keywords` 를 조회해 자동 추가합니다.
   - `based on novel`, `based on book`, `based on comic`, `based on play or musical` 등 원작 존재를 뜻하는 키워드가 기준입니다.
   - TMDb 조회 실패 시 등록은 계속 진행하고 태그만 생략합니다.
-  - 기존 항목은 `tools/migrate_novel_hashtag.py`로 백필할 수 있습니다.
+  - 기존/가져온 항목은 `tools/backfill_original_source_tag.py` 로 백필합니다.
 - `왓챠백업`
-  - 왓챠에서 가져온 평가 항목 중 `RatingModule.name == "왓챠 별점"`인 경우에만 유지합니다.
+  - 왓챠에서 가져온 평가 항목 중 `RatingModule.name == "왓챠 별점"` 인 경우에만 유지합니다.
   - `보고싶어요` 항목에는 유지하지 않습니다.
-  - 정리는 `tools/migrate_watcha_hashtag.py`로 동기화합니다.
 
 ---
 
@@ -164,8 +175,9 @@ Movie
 | GET | `/api/movies/<id>` | 앱 내 영화 상세 조회 |
 | GET | `/api/hashtags` | 해시태그 목록 |
 | POST | `/api/upload` | 이미지 첨부 |
-| GET | `/api/templates/ratings` | 커스텀 별점명 목록 |
-| GET | `/api/templates/comments` | 커스텀 코멘트명 목록 |
+| GET | `/api/templates/ratings` · `/api/templates/comments` | 커스텀 별점/코멘트명 목록 |
+| POST | `/api/watcha/sync` | 왓챠 동기화 서비스 트리거(systemd, 비차단) |
+| GET | `/api/watcha/sync/status` | 동기화 진행/결과 상태 |
 
 ---
 
@@ -189,9 +201,12 @@ Cinelog는 영화 검색과 표시를 위해 [The Movie Database (TMDB)](https:/
 |------|------|
 | `*.db`, `*.db-journal` | 개인 영화 기록 DB |
 | `static/uploads/*` | 사용자 첨부 이미지 |
-| `.env` | API 키 등 환경 변수 |
-| `logs/` | 런타임 로그 |
+| `.env`, `*.env` | TMDb 키 등 환경 변수 |
+| `watcha_state.json` | 왓챠 세션(평문 쿠키) |
+| `.watchapedia-browser/` | 왓챠 브라우저 프로필 |
 | `AGENTS.md` | 로컬 에이전트 지침 |
+
+> 배포 VM 의 `~/.cinelog-watcha.env`(왓챠 동기화 URL 등)는 레포 밖에 두며 `chmod 600` 으로 보호한다.
 
 ---
 
