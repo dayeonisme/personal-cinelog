@@ -32,6 +32,7 @@ data/
 .watchapedia-browser/
 .playwright-mcp/
 AGENTS.md
+.worktrees/
 
 # macOS
 .DS_Store
