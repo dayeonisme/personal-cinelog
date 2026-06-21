@@ -39,6 +39,10 @@ const API = async (path, opts = {}) => {
   return r.json();
 };
 
+// TMDb 포스터를 작은 썸네일(w185)로 — 그리드/리스트 카드는 작아서 w342 불필요.
+// 모바일 셀룰러에서 이미지 무게가 절반↓ 되어 로딩이 빨라진다. 비-TMDb URL은 그대로.
+const posterThumb = (url, size = 'w185') => url ? url.replace(/\/t\/p\/w\d+\//, `/t/p/${size}/`) : url;
+
 const $ = id => document.getElementById(id);
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
 const RATING_EMOJI_GROUPS = [
@@ -237,7 +241,7 @@ function renderHomeGrid() {
     const typeClass = entry.entry_type === 'review' ? 'type-review' : 'type-watchlist';
     const typeBadge = entry.entry_type === 'review' ? '평가' : '보고싶어요';
     const poster = m.poster_url
-      ? `<img class="movie-card-poster" src="${m.poster_url}" alt="${escHtml(m.title)}" loading="lazy">`
+      ? `<img class="movie-card-poster" src="${posterThumb(m.poster_url)}" alt="${escHtml(m.title)}" loading="lazy">`
       : `<div class="movie-card-no-poster">
           <span class="no-poster-kicker">NO POSTER</span>
           <span class="no-poster-title">${escHtml(m.title_ko)}</span>
@@ -362,7 +366,7 @@ function buildEntryCard(entry) {
   const director = m.director && m.director !== 'N/A' ? m.director : '';
 
   const poster = m.poster_url
-    ? `<img class="entry-poster" src="${m.poster_url}" alt="${escHtml(m.title)}" loading="lazy">`
+    ? `<img class="entry-poster" src="${posterThumb(m.poster_url)}" alt="${escHtml(m.title)}" loading="lazy">`
     : `<div class="entry-poster-placeholder">
         <span>NO POSTER</span>
         <strong>${escHtml(m.title)}</strong>
@@ -824,7 +828,7 @@ async function searchMovieForReg() {
   }
   $('reg-search-results').innerHTML = results.map(m => {
     const poster = m.poster_url
-      ? `<img class="search-result-poster" src="${m.poster_url}" alt="" loading="lazy">`
+      ? `<img class="search-result-poster" src="${posterThumb(m.poster_url)}" alt="" loading="lazy">`
       : `<div class="search-result-poster-placeholder">?</div>`;
     return `<div class="search-result-item" onclick="selectMovieFromSearch('${m.imdb_id}')">
       ${poster}
