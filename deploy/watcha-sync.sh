@@ -53,4 +53,9 @@ echo "[$(date -Is)] TMDb 보강 (신규 영화)"
 "$PY" tools/enrich_tmdb_metadata.py --only-missing-poster --commit --sleep 0.3 || \
   echo "  (보강 일부 실패 — TMDb 일시 오류일 수 있음, 다음 실행 때 재시도됨)"
 
+# 원작(소설/만화 등) 있는 작품의 신규 엔트리에 '원작존재' 해시태그 백필(멱등).
+echo "[$(date -Is)] 원작존재 해시태그 백필"
+"$PY" tools/backfill_original_source_tag.py --commit --sleep 0.2 || \
+  echo "  (태그 백필 일부 실패 — 다음 실행 때 재시도됨)"
+
 echo "[$(date -Is)] 동기화 완료"
