@@ -541,7 +541,7 @@ function buildMovieDetailEmptySection(kind, title, movie) {
   return `
     <div class="movie-detail-section ${kind}">
       <div class="movie-detail-section-header">
-        <h2 class="movie-detail-section-title">${escHtml(title)} <span class="badge">미등록</span></h2>
+        <h2 class="movie-detail-section-title">${escHtml(title)}</h2>
         <button type="button" class="movie-detail-add-btn" onclick="openRegisterForMovie('${kind}')">${isReview ? '평가 추가' : '보고싶어요 추가'}</button>
       </div>
       <div class="movie-detail-empty">아직 등록된 ${isReview ? '평가' : '보고싶어요'}가 없습니다.</div>
@@ -550,19 +550,12 @@ function buildMovieDetailEmptySection(kind, title, movie) {
 
 function buildMovieDetailEntrySection(kind, title, entry) {
   const isReview = kind === 'review';
-  const statusBadgeMap = { completed: '완료', in_progress: '진행중', stopped: '중단' };
-  let badge = '';
-  if (isReview && entry.watch_status) {
-    badge = `<span class="badge">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`;
-  } else if (!isReview && entry.watchlist_label) {
-    badge = `<span class="badge">${escHtml(entry.watchlist_label)}</span>`;
-  }
   const ratingsHtml = isReview ? buildRatingsHtml(entry.ratings) : '';
   const commentsHtml = buildCommentsHtml(entry.comments);
   return `
     <div class="movie-detail-section ${kind}">
       <div class="movie-detail-section-header">
-        <h2 class="movie-detail-section-title">${escHtml(title)} ${badge}</h2>
+        <h2 class="movie-detail-section-title">${escHtml(title)}</h2>
         <div class="movie-detail-section-actions">
           <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
           <button type="button" class="movie-detail-delete-btn" onclick="confirmDelete(${entry.id})">삭제</button>
