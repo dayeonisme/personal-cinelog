@@ -47,4 +47,10 @@ echo "[$(date -Is)] import 시작 (--commit)"
   --watchlist data/watchapedia_watchlist.csv \
   --commit
 
+# 새로 들어온 bare 영화(포스터 없음)에 TMDb 메타데이터(포스터/감독/배우/러닝타임/장르) 보강.
+# imdb_id LIKE 'watcha:%' AND poster_url IS NULL 만 타겟 → 기존 보강분은 건드리지 않음.
+echo "[$(date -Is)] TMDb 보강 (신규 영화)"
+"$PY" tools/enrich_tmdb_metadata.py --only-missing-poster --commit --sleep 0.3 || \
+  echo "  (보강 일부 실패 — TMDb 일시 오류일 수 있음, 다음 실행 때 재시도됨)"
+
 echo "[$(date -Is)] 동기화 완료"
