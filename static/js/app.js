@@ -240,10 +240,10 @@ function renderHomeGrid() {
       ? `<img class="movie-card-poster" src="${m.poster_url}" alt="${escHtml(m.title)}" loading="lazy">`
       : `<div class="movie-card-no-poster">
           <span class="no-poster-kicker">NO POSTER</span>
-          <span class="no-poster-title">${escHtml(m.title)}</span>
+          <span class="no-poster-title">${escHtml(m.title_ko)}</span>
         </div>`;
     const year = m.year ? `(${m.year})` : '';
-    const director = m.director && m.director !== 'N/A' ? m.director : '';
+    const director = m.director_ko && m.director_ko !== 'N/A' ? m.director_ko : '';
     const rating = defaultRatingOf(entry);
     const ratingHtml = rating != null
       ? `<div class="movie-card-overlay-rating">⭐ ${rating.toFixed(1)}</div>`
@@ -253,7 +253,7 @@ function renderHomeGrid() {
         ${poster}
         <span class="movie-card-type-badge">${typeBadge}</span>
         <div class="movie-card-overlay">
-          <div class="movie-card-overlay-title">${escHtml(m.title)} ${year}</div>
+          <div class="movie-card-overlay-title">${escHtml(m.title_ko)} ${year}</div>
           ${director ? `<div class="movie-card-overlay-sub">${escHtml(director)}</div>` : ''}
           ${ratingHtml}
         </div>
@@ -487,7 +487,12 @@ function renderMovieDetail(data) {
     ? `<img class="movie-detail-poster" src="${m.poster_url}" alt="${escHtml(m.title)}">`
     : `<div class="movie-detail-poster-placeholder"><span class="no-poster-kicker">NO POSTER</span><span class="no-poster-title">${escHtml(m.title)}</span></div>`;
 
+  // 원어(원제/원어 감독)는 표시명(한글)과 다를 때만 별도 행으로 노출
+  const origTitle = m.title_en && m.title_en !== m.title && m.title_en !== 'N/A' ? m.title_en : null;
+  const origDirector = m.director_en && m.director_en !== m.director && m.director_en !== 'N/A' ? m.director_en : null;
   const metaRows = [
+    ['원제', origTitle],
+    ['원어 감독', origDirector],
     ['배우', m.actors && m.actors !== 'N/A' ? m.actors : null],
     ['장르', m.genre && m.genre !== 'N/A' ? m.genre : null],
     ['러닝타임', fmtRuntime(m.runtime) || null],
