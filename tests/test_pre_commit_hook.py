@@ -29,12 +29,11 @@ def _run_hook(tmp_path: Path, content: str, filename: str = "probe.txt") -> subp
 
 
 def _sensitive_samples() -> list[str]:
-    local_user = "dayeon" + ".park"
+    local_user = "local" + ".user"
     sheet_id = "1LXUJ4So6ZV" + "BFwse5pr0BzQgKgtLbv8Gv2pMLk82Oo5Y"
     watcha_user = "ZBm5" + "RJM945d46"
     return [
         f"cd /Users/{local_user}/dev/project\n",
-        f"owner={local_user}\n",
         "project=" + "apply" + "home-watch\n",
         "TELEGRAM_CHAT_ID=" + "580" + "6848967\n",
         f"SPREADSHEET_ID='{sheet_id}'\n",

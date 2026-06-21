@@ -6,9 +6,9 @@ GCP 무료 e2-micro VM 에 올리고, **Tailscale 사설망으로 내 기기에�
 
 ## 1. VM (기존 것 재사용)
 
-이미 굴리는 Always Free e2-micro `cinelog-vm`(<ZONE>) 에 **함께 올린다.**
+기존 Always Free e2-micro `<VM_NAME>`(`<ZONE>`) 에 **함께 올린다.**
 - **새 VM 만들지 말 것** — GCP Always Free 는 계정당 e2-micro 1대만 무료. 두 번째는 과금.
-- existing-service 와 포트 충돌 없음(cinelog=5001). swap 으로 RAM 1GB 보호(아래 setup-vm.sh 가 자동).
+- 기존 서비스와 포트 충돌 없음(cinelog=5001). swap 으로 RAM 1GB 보호(아래 setup-vm.sh 가 자동).
 - 방화벽: **5001 을 열지 않는다.** 앱은 Tailscale IP 에만 바인딩하므로 외부 IP 로는 애초에 안 뜸(이중 안전장치).
 
 ## 2. VM 안에서 Tailscale 설치 (3번보다 먼저!)
@@ -16,7 +16,7 @@ GCP 무료 e2-micro VM 에 올리고, **Tailscale 사설망으로 내 기기에�
 서비스가 Tailscale IP 에만 바인딩하므로, 이걸 먼저 올려야 3번 서비스가 뜬다.
 
 ```bash
-gcloud compute ssh cinelog-vm --zone=<ZONE>   # Mac 에서 VM 접속
+gcloud compute ssh <VM_NAME> --zone=<ZONE>   # Mac 에서 VM 접속
 curl -fsSL https://tailscale.com/install.sh | sh
 sudo tailscale up          # 출력된 링크를 브라우저에서 열어 로그인
 tailscale ip -4            # 이 VM 의 100.x.x.x 주소 확인 (나중에 폰에서 사용)
@@ -36,7 +36,7 @@ bash deploy/setup-vm.sh    # venv + 의존성 + swap + systemd 서비스(자동�
 
 ```bash
 # Mac 에서
-gcloud compute scp .env cinelog-vm:~/movie-review/.env --zone=<ZONE>
+gcloud compute scp .env <VM_NAME>:~/movie-review/.env --zone=<ZONE>
 ```
 
 ## 4. 데이터(평가 DB + 업로드 이미지) 전송
@@ -45,7 +45,7 @@ DB·이미지는 `.gitignore` 라 clone 으로 안 따라온다. Mac 에서:
 
 ```bash
 # Mac 에서, 레포 루트에서
-deploy/push-data.sh cinelog-vm <ZONE>
+deploy/push-data.sh <VM_NAME> <ZONE>
 # 그 뒤 VM 에서
 sudo systemctl restart cinelog
 ```
@@ -117,7 +117,7 @@ bash deploy/setup-watcha-sync.sh
 ```bash
 # Mac 에서, 레포 루트
 tar czf /tmp/wb.tgz .watchapedia-browser
-gcloud compute scp /tmp/wb.tgz cinelog-vm:~/movie-review/ --zone=<ZONE>
+gcloud compute scp /tmp/wb.tgz <VM_NAME>:~/movie-review/ --zone=<ZONE>
 # VM 에서
 cd ~/movie-review && tar xzf wb.tgz && rm wb.tgz
 ```

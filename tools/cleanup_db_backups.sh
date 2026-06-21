@@ -3,7 +3,7 @@
 # launchd(주간)로 실행. 수동 실행도 가능.
 set -euo pipefail
 
-REPO="/Users/local-user/dev/movie-review"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
 KEEP=5
 LOG="$REPO/tools/cleanup_db_backups.log"
 
