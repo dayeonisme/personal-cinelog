@@ -155,6 +155,15 @@ def main() -> None:
                     if match and match.score >= args.threshold:
                         data = get_movie_detail(match.tmdb_id, args.retries)
                         updates = detail_to_updates(data)
+                        # 한국어 표시명/원제는 왓챠 값 우선 — TMDb ko 가 한국어 없으면 원어로
+                        # fallback 되어 title_ko/director_ko 가 일본어 등으로 덮이는 문제 방지.
+                        if ko:
+                            updates["title_ko"] = ko
+                        if orig:
+                            updates["title_en"] = orig
+                        wdirs = [n for n in (detail.get("director_names") or []) if n]
+                        if wdirs:
+                            updates["director_ko"] = ", ".join(wdirs)
                         if not movie.year and year:
                             movie.year = year
                         apply_updates(movie, updates)
