@@ -71,8 +71,10 @@ def _capture_headers(page, sample_code: str) -> dict:
     }
 
 
-def _watcha_detail(page, headers: dict, code: str):
-    resp = page.request.get(f"{WATCHA_BASE}/api/contents/{code}", headers=headers)
+def _watcha_detail(page, headers: dict, code: str, timeout: int = 30000):
+    resp = page.request.get(
+        f"{WATCHA_BASE}/api/contents/{code}", headers=headers, timeout=timeout
+    )
     if resp.status != 200:
         return None
     return (resp.json() or {}).get("result") or {}

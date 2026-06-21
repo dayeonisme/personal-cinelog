@@ -39,7 +39,7 @@ def main() -> None:
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--sleep", type=float, default=0.5)
-    ap.add_argument("--commit-every", type=int, default=50)
+    ap.add_argument("--commit-every", type=int, default=10)
     args = ap.parse_args()
 
     from playwright.sync_api import sync_playwright
@@ -68,17 +68,16 @@ def main() -> None:
             for movie in targets:
                 checked += 1
                 code = movie.imdb_id.split(":", 1)[1]
-                detail = None
-                for attempt in range(3):
-                    try:
-                        detail = _watcha_detail(page, headers, code)
-                    except Exception:
-                        detail = None
-                    if detail:
-                        break
-                    page.wait_for_timeout(1200 * (attempt + 1))  # rate-limit 백오프
+                # throttle 시 30초 매달리지 않도록 짧은 타임아웃 단발 호출 → 실패하면 스킵.
+                # (남은 건 쿨다운 후 재실행으로 처리. 멱등이라 안전.)
+                try:
+                    detail = _watcha_detail(page, headers, code, timeout=8000)
+                except Exception:
+                    detail = None
                 if not detail:
                     no_detail += 1
+                    if args.sleep:
+                        time.sleep(args.sleep)
                     continue
 
                 ko = (detail.get("title") or "").strip()
