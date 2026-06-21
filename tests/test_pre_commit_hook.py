@@ -60,3 +60,19 @@ def test_pre_commit_blocks_env_files(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "BLOCKED FILE" in result.stdout
+
+
+def test_pre_commit_blocks_locally_configured_privacy_pattern(tmp_path: Path) -> None:
+    repo = _init_repo(tmp_path, "probe.txt", "owner=local-sensitive-identity\n")
+    subprocess.run(
+        ["git", "config", "--local", "--add", "cinelog.privacyPattern", "local-sensitive-identity"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    result = subprocess.run([str(HOOK)], cwd=repo, capture_output=True, text=True)
+
+    assert result.returncode == 1
+    assert "local privacy pattern" in result.stdout

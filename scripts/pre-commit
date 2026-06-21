@@ -50,6 +50,11 @@ check_pattern "WatchaPedia user URL" 'pedia[.]watcha[.]com/.*/users/[A-Za-z0-9_-
 check_pattern "generic API key or token" '(API_KEY|BOT_TOKEN|ACCESS_TOKEN|SECRET_KEY|CLIENT_SECRET)[[:space:]]*=[[:space:]]*["'"'"']?[A-Za-z0-9_./+-]{35,}'
 check_pattern "private key" '"private_key"[[:space:]]*:[[:space:]]*"-----BEGIN'
 
+while IFS= read -r pattern; do
+    [ -z "$pattern" ] && continue
+    check_pattern "local privacy pattern" "$pattern"
+done < <(git config --local --get-all cinelog.privacyPattern || true)
+
 if [[ $FAIL -eq 1 ]]; then
     echo ""
     red "Commit blocked. Remove the items above before committing."
