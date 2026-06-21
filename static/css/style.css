@@ -1030,6 +1030,9 @@ img { display: block; }
 .toast.ok { border-color: var(--accent); }
 .toast.err { border-color: var(--accent-err); }
 
+/* 모바일 바텀 탭바 — 데스크탑은 숨김 */
+.mobile-tabbar { display: none; }
+
 /* ═══════════════════════════════════════════════════════════
    MOBILE (≤680px)
    ═══════════════════════════════════════════════════════════ */
@@ -1091,4 +1094,33 @@ img { display: block; }
   .movie-detail-section-header { flex-direction: column; align-items: flex-start; gap: 10px; }
   .movie-detail-section-title { font-size: 19px; }
   .movie-detail-section-actions { width: 100%; }
+
+  /* 네비를 바텀 탭바로 — 상단 GNB 의 평가/보고싶어요 숨김(로고·KR/EN·↻ 만 남김) */
+  .gnb-buttons { display: none; }
+
+  .mobile-tabbar {
+    display: flex;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    height: 56px;
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border-gold);
+    padding-bottom: env(safe-area-inset-bottom, 0px);  /* iOS 홈 인디케이터 */
+  }
+  .tabbar-btn {
+    flex: 1; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 3px; padding: 6px 0;
+    background: none; border: none; cursor: pointer;
+    color: var(--text-dim); transition: color 0.15s;
+  }
+  .tabbar-btn svg { width: 23px; height: 23px; display: block; }
+  .tabbar-btn span {
+    font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.02em;
+    line-height: 1; white-space: nowrap;
+  }
+  .tabbar-btn.active { color: var(--accent); }
+
+  /* 본문이 탭바에 안 가리게 + FAB 를 탭바 위로 */
+  .page { padding-bottom: 78px; }
+  .fab { bottom: 72px; right: 18px; }
 }

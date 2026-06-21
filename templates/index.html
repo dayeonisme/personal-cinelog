@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Cinelog</title>
-<link rel="stylesheet" href="/static/css/style.css?v=20260621-mobile">
+<link rel="stylesheet" href="/static/css/style.css?v=20260621-tabbar">
 <script defer src="/static/vendor/marked.min.js?v=15.0.12"></script>
 </head>
 <body>
@@ -50,6 +50,32 @@
 </nav>
 
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- ── 모바일 바텀 탭바 (평가 · 홈 · 보고싶어요) ──────────────── -->
+<nav class="mobile-tabbar" aria-label="모바일 네비게이션">
+  <button class="tabbar-btn" data-page="review" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor">
+      <path d="M9 7h11M9 12h11M9 17h7" stroke-width="1.7" stroke-linecap="round"/>
+      <circle cx="4.5" cy="7" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="12" r="1.1" fill="currentColor" stroke="none"/>
+      <circle cx="4.5" cy="17" r="1.1" fill="currentColor" stroke="none"/>
+    </svg>
+    <span>평가</span>
+  </button>
+  <button class="tabbar-btn" data-page="home" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor">
+      <path d="M3 11.5 12 4l9 7.5" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M5.5 10v9.5h13V10" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>홈</span>
+  </button>
+  <button class="tabbar-btn" data-page="watchlist" type="button">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" stroke="currentColor">
+      <path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z" stroke-width="1.6" stroke-linejoin="round"/>
+    </svg>
+    <span>보고싶어요</span>
+  </button>
+</nav>
 
 <!-- ── MAIN ──────────────────────────────────────────────── -->
 <main class="main-content">
@@ -323,6 +349,6 @@
   </div>
 </div>
 
-<script defer src="/static/js/app.js?v=20260621-mobile"></script>
+<script defer src="/static/js/app.js?v=20260621-tabbar"></script>
 </body>
 </html>

@@ -149,10 +149,10 @@ function hideModal(id) { $(id).style.display = 'none'; }
 function navigateTo(page, opts = {}) {
   if (state.currentPage !== page) resetPageSearch(state.currentPage);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.gnb-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.gnb-btn, .tabbar-btn').forEach(b => b.classList.remove('active'));
   $(`page-${page}`).classList.add('active');
-  const btn = document.querySelector(`.gnb-btn[data-page="${page}"]`);
-  if (btn) btn.classList.add('active');
+  document.querySelectorAll(`.gnb-btn[data-page="${page}"], .tabbar-btn[data-page="${page}"]`)
+    .forEach(b => b.classList.add('active'));
   state.currentPage = page;
 
   if (page === 'home') loadHome(true);
@@ -454,7 +454,7 @@ function navigateToMovie(movieId, opts = {}) {
   if (state.currentPage !== 'movie') state.movieDetailFrom = state.currentPage;
   resetPageSearch(state.currentPage);
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.gnb-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.gnb-btn, .tabbar-btn').forEach(b => b.classList.remove('active'));
   $('page-movie').classList.add('active');
   state.currentPage = 'movie';
   loadMovieDetail(movieId);
@@ -1376,6 +1376,10 @@ document.querySelectorAll('.gnb-btn').forEach(btn => {
     const page = btn.dataset.page;
     navigateTo(page);
   };
+});
+
+document.querySelectorAll('.tabbar-btn').forEach(btn => {
+  btn.onclick = () => navigateTo(btn.dataset.page);
 });
 
 $('gnb-home-btn').onclick = () => navigateTo('home');
