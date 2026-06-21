@@ -31,8 +31,10 @@ if [ ! -f "$STATE" ]; then
   exit 1
 fi
 
-echo "[$(date -Is)] export 시작 (headless + storage-state)"
-"$PY" tools/export_watchapedia.py --headless \
+# headless 는 무한스크롤 lazy-load 를 못 굴려 첫 페이지(20개)만 수집됨.
+# xvfb 가상 디스플레이 + headful 로 실제 렌더링해야 전량 스크롤됨.
+echo "[$(date -Is)] export 시작 (xvfb headful + storage-state)"
+xvfb-run -a "$PY" tools/export_watchapedia.py \
   --storage-state "$STATE" \
   --ratings-url "$WATCHA_RATINGS_URL" \
   --watchlist-url "$WATCHA_WATCHLIST_URL" \
