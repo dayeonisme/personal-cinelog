@@ -39,9 +39,9 @@ const API = async (path, opts = {}) => {
   return r.json();
 };
 
-// TMDb 포스터를 작은 썸네일(w185)로 — 그리드/리스트 카드는 작아서 w342 불필요.
-// 모바일 셀룰러에서 이미지 무게가 절반↓ 되어 로딩이 빨라진다. 비-TMDb URL은 그대로.
-const posterThumb = (url, size = 'w185') => url ? url.replace(/\/t\/p\/w\d+\//, `/t/p/${size}/`) : url;
+// TMDb 포스터를 작은 썸네일로 — 카드/리스트는 작아서 고해상도 불필요.
+// 기본 w154(그리드/리스트), 검색결과 w92, 상세 w185. 비-TMDb URL은 그대로.
+const posterThumb = (url, size = 'w154') => url ? url.replace(/\/t\/p\/w\d+\//, `/t/p/${size}/`) : url;
 
 const $ = id => document.getElementById(id);
 const fmtDate = iso => iso ? new Date(iso).toLocaleDateString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
@@ -488,7 +488,7 @@ function renderMovieDetail(data) {
   const movieHashtags = primaryEntryHashtags(data);
 
   const poster = m.poster_url
-    ? `<img class="movie-detail-poster" src="${m.poster_url}" alt="${escHtml(m.title)}">`
+    ? `<img class="movie-detail-poster" src="${posterThumb(m.poster_url, 'w185')}" alt="${escHtml(m.title)}">`
     : `<div class="movie-detail-poster-placeholder"><span class="no-poster-kicker">NO POSTER</span><span class="no-poster-title">${escHtml(m.title)}</span></div>`;
 
   // 원어(원제/원어 감독)는 표시명(한글)과 다를 때만 별도 행으로 노출
@@ -828,7 +828,7 @@ async function searchMovieForReg() {
   }
   $('reg-search-results').innerHTML = results.map(m => {
     const poster = m.poster_url
-      ? `<img class="search-result-poster" src="${posterThumb(m.poster_url)}" alt="" loading="lazy">`
+      ? `<img class="search-result-poster" src="${posterThumb(m.poster_url, 'w92')}" alt="" loading="lazy">`
       : `<div class="search-result-poster-placeholder">?</div>`;
     return `<div class="search-result-item" onclick="selectMovieFromSearch('${m.imdb_id}')">
       ${poster}
