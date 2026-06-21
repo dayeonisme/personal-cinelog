@@ -60,7 +60,9 @@ def main() -> None:
     ap.add_argument("--storage-state", required=True)
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--limit", type=int)
-    ap.add_argument("--threshold", type=int, default=85)
+    # choose_match 는 정확 제목/원제 매칭만 반환(퍼지 없음). 80=exact_original_title
+    # (원제 정확, 연도만 재개봉/지역차로 어긋남) 까지 신뢰. 연도 일치는 100이라 우선됨.
+    ap.add_argument("--threshold", type=int, default=80)
     ap.add_argument("--retries", type=int, default=2)
     ap.add_argument("--sleep", type=float, default=0.2)
     ap.add_argument("--commit-every", type=int, default=50)
