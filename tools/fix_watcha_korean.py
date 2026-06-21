@@ -38,7 +38,7 @@ def main() -> None:
     ap.add_argument("--storage-state", required=True)
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--limit", type=int)
-    ap.add_argument("--sleep", type=float, default=0.2)
+    ap.add_argument("--sleep", type=float, default=0.5)
     ap.add_argument("--commit-every", type=int, default=50)
     args = ap.parse_args()
 
@@ -68,10 +68,15 @@ def main() -> None:
             for movie in targets:
                 checked += 1
                 code = movie.imdb_id.split(":", 1)[1]
-                try:
-                    detail = _watcha_detail(page, headers, code)
-                except Exception:
-                    detail = None
+                detail = None
+                for attempt in range(3):
+                    try:
+                        detail = _watcha_detail(page, headers, code)
+                    except Exception:
+                        detail = None
+                    if detail:
+                        break
+                    page.wait_for_timeout(1200 * (attempt + 1))  # rate-limit 백오프
                 if not detail:
                     no_detail += 1
                     continue
