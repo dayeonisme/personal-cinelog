@@ -338,13 +338,12 @@ img { display: block; }
 
 .movie-card-overlay {
   position: absolute; inset: 0;
-  background: rgba(10,8,6,0.88);
   display: flex; flex-direction: column;
-  justify-content: center; align-items: center;
-  text-align: center; padding: 14px;
-  opacity: 0; transition: opacity 0.22s ease;
+  justify-content: flex-end; align-items: flex-start;
+  text-align: left; padding: 12px 13px 13px;
+  background: linear-gradient(to top,
+    rgba(8,6,4,0.92) 0%, rgba(8,6,4,0.5) 44%, rgba(8,6,4,0) 80%);
 }
-.movie-card:hover .movie-card-overlay { opacity: 1; }
 
 .movie-card-overlay-title {
   font-family: var(--font-serif);
