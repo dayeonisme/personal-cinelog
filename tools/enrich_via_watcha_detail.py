@@ -10,6 +10,7 @@ headless 는 봇감지로 막히므로 VM 에선 xvfb 로 headful 실행:
     xvfb-run python tools/enrich_via_watcha_detail.py --storage-state watcha_state.json --commit
 """
 import argparse
+import re
 import sys
 import time
 from pathlib import Path
@@ -30,6 +31,28 @@ from tools.enrich_tmdb_metadata import (
 )
 
 WATCHA_BASE = "https://pedia.watcha.com"
+
+# 제목 끝의 에디션 장식(감독판/디 오리지널/Director's Cut/4K 등)을 떼어 검색 적중률을 높인다.
+# 예: "Das Boot - Director's Cut" → "Das Boot", "패왕별희 디 오리지널" → "패왕별희".
+_EDITION_PATTERNS = [
+    r"\s*[-:]\s*the\s+director'?s\s+cut\b.*$",
+    r"\s*[-:]?\s*director'?s\s+cut\b.*$",
+    r"\s*[-:]?\s*디렉터스\s*컷.*$",
+    r"\s*[-:]?\s*디\s*오리지널.*$",
+    r"\s*[-:]?\s*감독판.*$",
+    r"\s*[-:]?\s*비디오판.*$",
+    r"\s*[-:]?\s*무삭제판.*$",
+    r"\s*[-:]?\s*확장판.*$",
+    r"\s*[-:]?\s*리마스터(링|드)?.*$",
+    r"\s*[-:(]?\s*\b4k\b.*$",
+]
+
+
+def _strip_edition(title: str) -> str:
+    text = title or ""
+    for pattern in _EDITION_PATTERNS:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE)
+    return text.strip()
 
 
 def _capture_headers(page, sample_code: str) -> dict:
@@ -114,15 +137,20 @@ def main() -> None:
                     orig = (detail.get("original_title") or "").strip()
                     ko = (detail.get("title") or "").strip()
                     year = str(detail.get("year")) if detail.get("year") else (movie.year or None)
-                    query_title = orig or ko
+                    # 원제 → 원제(에디션 strip) → 한국어 제목 → 한국어(strip) 순으로 후보 검색.
+                    candidates = []
+                    for cand in (orig, _strip_edition(orig), ko, _strip_edition(ko)):
+                        cand = (cand or "").strip()
+                        if cand and cand not in candidates:
+                            candidates.append(cand)
 
                     match = None
-                    if query_title:
-                        match = search_best_match(query_title, year, args.retries)
-                        if (not match or match.score < args.threshold) and ko and ko != query_title:
-                            alt = search_best_match(ko, year, args.retries)
-                            if alt and (not match or alt.score > match.score):
-                                match = alt
+                    for q in candidates:
+                        m = search_best_match(q, year, args.retries)
+                        if m and (match is None or m.score > match.score):
+                            match = m
+                        if match and match.score >= 100:
+                            break  # 정확 매칭이면 더 안 봄
 
                     if match and match.score >= args.threshold:
                         data = get_movie_detail(match.tmdb_id, args.retries)
