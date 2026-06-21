@@ -44,3 +44,6 @@ AGENTS.md
 .idea/
 *.swp
 *.swo
+
+# 왓챠 포터블 세션 (평문 쿠키)
+watcha_state.json

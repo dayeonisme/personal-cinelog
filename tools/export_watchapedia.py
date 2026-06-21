@@ -441,7 +441,11 @@ def main() -> None:
     parser.add_argument(
         "--headless",
         action="store_true",
-        help="브라우저 창 없이 실행 (cron/서버용). 세션 만료 시 WATCHA_EMAIL/WATCHA_PASSWORD 로 자동 로그인 시도.",
+        help="브라우저 창 없이 실행 (cron/서버용).",
+    )
+    parser.add_argument(
+        "--storage-state",
+        help="portable 세션 JSON 경로(쿠키 평문). 있으면 프로필 대신 이걸로 로그인 상태를 이식(OS 무관).",
     )
     args = parser.parse_args()
 
@@ -458,11 +462,19 @@ def main() -> None:
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as playwright:
-        context = playwright.chromium.launch_persistent_context(
-            ".watchapedia-browser",
-            headless=args.headless,
-            viewport={"width": 1440, "height": 1000},
-        )
+        if args.storage_state and Path(args.storage_state).exists():
+            # 포터블 세션 JSON (Mac→VM OS 무관). 쿠키 주입 → 로그인 상태 이식.
+            browser = playwright.chromium.launch(headless=args.headless)
+            context = browser.new_context(
+                storage_state=str(args.storage_state),
+                viewport={"width": 1440, "height": 1000},
+            )
+        else:
+            context = playwright.chromium.launch_persistent_context(
+                ".watchapedia-browser",
+                headless=args.headless,
+                viewport={"width": 1440, "height": 1000},
+            )
         page = context.new_page()
 
         ratings_rows = []

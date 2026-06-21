@@ -24,9 +24,16 @@ set -a; . "$CONF"; set +a
 : "${WATCHA_WATCHLIST_URL:?WATCHA_WATCHLIST_URL 미설정}"
 
 PY="$APPDIR/.venv/bin/python"
+STATE="$APPDIR/watcha_state.json"
+if [ ! -f "$STATE" ]; then
+  echo "세션 파일 없음: $STATE" >&2
+  echo "Mac 에서 'python tools/dump_watcha_state.py' 로 생성 후 VM ~/movie-review/ 로 복사하세요." >&2
+  exit 1
+fi
 
-echo "[$(date -Is)] export 시작 (headless)"
+echo "[$(date -Is)] export 시작 (headless + storage-state)"
 "$PY" tools/export_watchapedia.py --headless \
+  --storage-state "$STATE" \
   --ratings-url "$WATCHA_RATINGS_URL" \
   --watchlist-url "$WATCHA_WATCHLIST_URL" \
   --out-dir data
