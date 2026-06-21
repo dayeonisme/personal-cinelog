@@ -1076,9 +1076,16 @@ img { display: block; }
   .movie-card-overlay-rating { font-size: 11px; margin-top: 3px; }
   .movie-card-overlay-rating .star-disp { font-size: 11px; }
 
-  /* 검색/필터: 줄바꿈 방지 + 가로 스크롤 */
+  /* 가로 드래그(오버플로) 차단 — 위아래 스크롤만 */
+  html, body { overflow-x: hidden; max-width: 100%; }
+  .main-content, .page { max-width: 100%; overflow-x: hidden; }
+
+  /* 검색/필터: 화면 폭에 맞게 축소 + 넘치면 줄바꿈 */
   .movie-search-box { gap: 8px; }
-  .filter-btn { white-space: nowrap; flex: 0 0 auto; }
+  .toolbar { flex-wrap: wrap; gap: 8px; }
+  .filter-group { flex-wrap: wrap; gap: 4px; min-width: 0; }
+  .filter-btn { white-space: nowrap; padding: 6px 12px; font-size: 12px; letter-spacing: 0.03em; }
+  .sort-select { padding: 6px 10px; font-size: 13px; margin-left: auto; }
   /* iOS 입력 포커스 시 자동 확대 방지(16px+) */
   input, select, textarea { font-size: 16px; }
 
