@@ -1,0 +1,11 @@
+[Unit]
+Description=Cinelog WatchaPedia 일일 동기화 타이머
+
+[Timer]
+# VM 시스템 시간은 UTC. 19:00 UTC = 04:00 KST (트래픽/RAM 한가한 새벽).
+OnCalendar=*-*-* 19:00:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

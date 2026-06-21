@@ -1,0 +1,16 @@
+[Unit]
+Description=Cinelog WatchaPedia 일일 동기화 (export -> import)
+After=network-online.target tailscaled.service cinelog.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=__APPDIR__
+# 자격증명은 ExecStart 가 읽는 ~/.cinelog-watcha.env 에 있음(서비스 파일엔 비번 없음).
+ExecStart=__APPDIR__/deploy/watcha-sync.sh
+# e2-micro(1GB) 보호: Chromium 폭주 시 cinelog/existing-service 대신 이 작업만 죽게.
+MemoryMax=800M
+TimeoutStartSec=600
+# 실패하면 알림 유닛 실행(있을 때만; 없으면 무시됨)
+OnFailure=cinelog-watcha-sync-failed.service

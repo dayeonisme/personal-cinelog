@@ -1,6 +1,8 @@
 import argparse
 import csv
+import os
 import re
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -186,6 +188,116 @@ def is_login_visible(page) -> bool:
     return False
 
 
+# ── 자동 로그인 (cron/headless 대비) ──────────────────────────────────────────
+# main() 에서 채운다. 쿠키 세션(.watchapedia-browser)을 항상 우선하고,
+# 만료됐을 때만 저장된 자격증명으로 1회 로그인 시도한다.
+_HEADLESS = False
+_EMAIL = None
+_PASSWORD = None
+
+# 왓챠 DOM 변경/언어 차이에 대비한 다중 fallback 셀렉터
+_EMAIL_SELECTORS = (
+    "input[name='email']",
+    "input[type='email']",
+    "input[placeholder*='이메일']",
+    "input[placeholder*='Email']",
+    "input[autocomplete='username']",
+)
+_PASSWORD_SELECTORS = (
+    "input[name='password']",
+    "input[type='password']",
+    "input[placeholder*='비밀번호']",
+    "input[placeholder*='Password']",
+    "input[autocomplete='current-password']",
+)
+_SUBMIT_SELECTORS = (
+    "button[data-select='sign-in']",
+    "form button[type='submit']",
+    "button[type='submit']",
+    "button:has-text('로그인')",
+    "button:has-text('Sign in')",
+)
+
+
+def _first_visible(page, selectors):
+    for sel in selectors:
+        loc = page.locator(sel)
+        for i in range(min(loc.count(), 5)):
+            cand = loc.nth(i)
+            try:
+                if cand.is_visible():
+                    return cand
+            except Exception:
+                continue
+    return None
+
+
+def attempt_login(page, email: str, password: str) -> bool:
+    """저장된 이메일/비번으로 자동 로그인 시도. 성공 여부 반환. CAPTCHA/2FA 면 실패."""
+    opener = _first_visible(
+        page,
+        (
+            "button[data-select='header-sign-in']",
+            "button:has-text('로그인')",
+            "button:has-text('Login')",
+        ),
+    )
+    if opener is not None:
+        try:
+            opener.click()
+            page.wait_for_load_state("networkidle")
+            time.sleep(1)
+        except Exception:
+            pass
+
+    email_input = _first_visible(page, _EMAIL_SELECTORS)
+    password_input = _first_visible(page, _PASSWORD_SELECTORS)
+    if email_input is None or password_input is None:
+        print("auto-login: 로그인 입력칸을 못 찾음 (DOM 변경 또는 CAPTCHA 가능).")
+        return False
+    try:
+        email_input.fill(email)
+        password_input.fill(password)
+    except Exception as exc:
+        print(f"auto-login: 입력 실패 {exc}")
+        return False
+
+    submit = _first_visible(page, _SUBMIT_SELECTORS)
+    try:
+        if submit is not None:
+            submit.click()
+        else:
+            password_input.press("Enter")
+    except Exception as exc:
+        print(f"auto-login: 제출 실패 {exc}")
+        return False
+
+    page.wait_for_load_state("networkidle")
+    time.sleep(2)
+    return not is_login_visible(page)
+
+
+def ensure_logged_in(page) -> None:
+    """쿠키 세션 우선 → 만료 시 자동 로그인 → 그래도 안 되면 cron/headless 에선 즉시 실패(무한대기 금지)."""
+    if not is_login_visible(page):
+        return  # 쿠키 세션 유효 (정상 경로)
+
+    if _EMAIL and _PASSWORD:
+        print("세션 만료 감지 — 저장된 자격증명으로 자동 로그인 시도...")
+        if attempt_login(page, _EMAIL, _PASSWORD):
+            print("자동 로그인 성공.")
+            return
+        print("자동 로그인 실패 (CAPTCHA/2FA/셀렉터 변경 가능).")
+
+    if _HEADLESS or not sys.stdin.isatty():
+        raise SystemExit(
+            "WATCHA_LOGIN_REQUIRED: 세션 만료 + 자동 로그인 불가. "
+            "Mac 에서 한 번 재로그인 후 .watchapedia-browser 프로필을 VM 으로 재동기화하세요."
+        )
+
+    wait_for_manual_login(page)  # 대화형(사람 있음) — 기존 수동 로그인
+
+
 def collect_scrolling_movies(page, pause_seconds: float, stable_rounds: int) -> list:
     collected = {}
     stable_count = 0
@@ -281,7 +393,7 @@ def collect_profile_collection(
     user_base_url = derive_user_base_url(profile_url)
     print(f"Opening profile {user_base_url}")
     page.goto(user_base_url, wait_until="domcontentloaded")
-    wait_for_manual_login(page)
+    ensure_logged_in(page)
     page.wait_for_load_state("networkidle")
 
     if not click_first_visible_link(page, "/contents/movies", "archive movie tab"):
@@ -311,7 +423,7 @@ def collect_profile_collection(
 def collect_page_movies(page, url: str, pause_seconds: float, stable_rounds: int) -> list:
     print(f"Opening {url}")
     page.goto(url, wait_until="domcontentloaded")
-    wait_for_manual_login(page)
+    ensure_logged_in(page)
     page.wait_for_load_state("networkidle")
     return collect_scrolling_movies(page, pause_seconds=pause_seconds, stable_rounds=stable_rounds)
 
@@ -326,10 +438,20 @@ def main() -> None:
     parser.add_argument("--out-dir", type=Path, default=Path("data"))
     parser.add_argument("--pause-seconds", type=float, default=1.25)
     parser.add_argument("--stable-rounds", type=int, default=3)
+    parser.add_argument(
+        "--headless",
+        action="store_true",
+        help="브라우저 창 없이 실행 (cron/서버용). 세션 만료 시 WATCHA_EMAIL/WATCHA_PASSWORD 로 자동 로그인 시도.",
+    )
     args = parser.parse_args()
 
     if not (args.profile_url or args.ratings_url or args.watchlist_url):
         parser.error("provide --profile-url, --ratings-url, or --watchlist-url")
+
+    global _HEADLESS, _EMAIL, _PASSWORD
+    _HEADLESS = args.headless
+    _EMAIL = os.environ.get("WATCHA_EMAIL")
+    _PASSWORD = os.environ.get("WATCHA_PASSWORD")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -338,7 +460,7 @@ def main() -> None:
     with sync_playwright() as playwright:
         context = playwright.chromium.launch_persistent_context(
             ".watchapedia-browser",
-            headless=False,
+            headless=args.headless,
             viewport={"width": 1440, "height": 1000},
         )
         page = context.new_page()

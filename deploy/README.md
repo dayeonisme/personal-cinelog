@@ -78,3 +78,53 @@ sudo systemctl restart cinelog
 - gunicorn 이 Flask debug 없이 구동 → 디버거 노출 위험 없음.
 - 부팅 직후 잠깐 cinelog 가 죽어있을 수 있음(Tailscale 올라오기 전엔 fail-closed 로 종료 후 재시도). 몇 초 뒤 자동 복구.
 - RAM 부족(OOM) 시: swap 자동 생성됨. 그래도 모자라면 `journalctl -u cinelog` 에서 OOM 확인 → 최후수단 머신 e2-small 업그레이드(Always Free 깨짐).
+
+## 왓챠 일일 자동 동기화 (선택)
+
+매일 새벽 왓챠피디아의 평가/보고싶어요를 긁어 Cinelog DB 에 반영한다.
+**쿠키 세션(.watchapedia-browser)을 1순위로 쓰고**, 만료 시에만 저장된 이메일/비번으로 자동 로그인한다.
+
+### 동작/한계
+
+- 평소엔 복사해 둔 로그인 쿠키로 동작(로그인 시도 안 함 → 차단 위험 최소).
+- 세션 만료 시 `~/.cinelog-watcha.env` 의 자격증명으로 1회 자동 로그인 시도.
+- 그것마저 **CAPTCHA/2FA/봇차단**(미국 VM IP라 가능)으로 실패하면 → 무한대기 없이 즉시 실패 + journal 알림. 그땐 Mac 에서 한 번 재로그인 후 프로필 재동기화(아래 4) 필요.
+- headless Chromium 이 왓챠에 막히면 xvfb(가상 디스플레이) 로 전환해야 할 수 있음(검증 시 확인).
+
+### 설치 (VM)
+
+```bash
+# 1) 코드 최신화
+cd ~/movie-review && git pull
+
+# 2) 자격증명/URL 설정 파일 — 비번 들어가니 VM 에서 직접 작성(chmod 600)
+cat > ~/.cinelog-watcha.env <<'EOF'
+WATCHA_EMAIL=you@example.com
+WATCHA_PASSWORD=YOUR_PW
+WATCHA_RATINGS_URL=https://pedia.watcha.com/ko-KR/users/XXXX/contents/movies/ratings
+WATCHA_WATCHLIST_URL=https://pedia.watcha.com/ko-KR/users/XXXX/contents/movies/wishes
+EOF
+chmod 600 ~/.cinelog-watcha.env
+
+# 3) Chromium 설치 + 타이머 등록
+bash deploy/setup-watcha-sync.sh
+```
+
+### 로그인 쿠키 프로필 이식 (Mac → VM, 4)
+
+쿠키 세션이 1순위라 처음 한 번(그리고 만료 때마다) Mac 의 로그인된 프로필을 VM 으로 복사한다.
+
+```bash
+# Mac 에서, 레포 루트
+tar czf /tmp/wb.tgz .watchapedia-browser
+gcloud compute scp /tmp/wb.tgz cinelog-vm:~/movie-review/ --zone=<ZONE>
+# VM 에서
+cd ~/movie-review && tar xzf wb.tgz && rm wb.tgz
+```
+
+### 운영
+
+- 즉시 1회 테스트: `sudo systemctl start cinelog-watcha-sync.service && journalctl -u cinelog-watcha-sync -f`
+- 다음 실행 확인: `systemctl list-timers cinelog-watcha-sync.timer`
+- 스케줄: 매일 19:00 UTC = 04:00 KST. 변경은 `cinelog-watcha-sync.timer` 의 `OnCalendar`.
+- 실패 알림: journal `cinelog-watcha` 태그. 텔레그램/이메일 push 원하면 `deploy/watcha-sync-notify.sh` 작성(있으면 실패 시 자동 실행).

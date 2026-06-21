@@ -1,0 +1,9 @@
+[Unit]
+Description=Cinelog WatchaPedia 동기화 실패 알림
+
+[Service]
+Type=oneshot
+# 기본은 journal 에 명확히 남김. 텔레그램/이메일 push 를 원하면
+# deploy/watcha-sync-notify.sh 를 만들어 두면 그것도 실행됨.
+ExecStart=/usr/bin/logger -t cinelog-watcha "동기화 실패 — 세션 만료/CAPTCHA 가능. Mac 에서 왓챠 재로그인 후 .watchapedia-browser 프로필 재동기화 필요."
+ExecStart=-__APPDIR__/deploy/watcha-sync-notify.sh
