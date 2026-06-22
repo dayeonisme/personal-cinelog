@@ -64,9 +64,25 @@ def ensure_movie_schema():
     db.session.commit()
 
 
+def ensure_indexes():
+    # FK columns lack indexes by default in SQLite, forcing full scans on
+    # every list/filter and every per-entry relationship load.
+    statements = [
+        "CREATE INDEX IF NOT EXISTS ix_entries_movie_id ON entries(movie_id)",
+        "CREATE INDEX IF NOT EXISTS ix_entries_entry_type ON entries(entry_type)",
+        "CREATE INDEX IF NOT EXISTS ix_entries_created_at ON entries(created_at)",
+        "CREATE INDEX IF NOT EXISTS ix_rating_modules_entry_id ON rating_modules(entry_id)",
+        "CREATE INDEX IF NOT EXISTS ix_comment_modules_entry_id ON comment_modules(entry_id)",
+    ]
+    for statement in statements:
+        db.session.execute(db.text(statement))
+    db.session.commit()
+
+
 with app.app_context():
     db.create_all()
     ensure_movie_schema()
+    ensure_indexes()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -387,7 +403,15 @@ def list_entries():
     page = int(request.args.get('page', 1))
     per_page = int(request.args.get('per_page', 20))
 
-    q = Entry.query.join(Movie)
+    from sqlalchemy.orm import contains_eager, selectinload
+    q = (Entry.query
+         .join(Entry.movie)
+         .options(
+             contains_eager(Entry.movie),
+             selectinload(Entry.ratings),
+             selectinload(Entry.comments),
+             selectinload(Entry.hashtags),
+         ))
 
     if entry_type:
         q = q.filter(Entry.entry_type == entry_type)
@@ -446,11 +470,23 @@ def list_entries():
 
     total = q.count()
     entries = q.offset((page - 1) * per_page).limit(per_page).all()
+
+    # Precompute which movies on this page have a review, in one query, so
+    # to_dict() doesn't fire a per-entry watchlist_kind() lookup (N+1).
+    movie_ids = {e.movie_id for e in entries}
+    review_movie_ids = set()
+    if movie_ids:
+        review_movie_ids = {
+            mid for (mid,) in db.session.query(Entry.movie_id)
+            .filter(Entry.entry_type == 'review', Entry.movie_id.in_(movie_ids))
+            .distinct()
+        }
+
     return jsonify({
         'total': total,
         'page': page,
         'per_page': per_page,
-        'items': [e.to_dict(lang=lang) for e in entries],
+        'items': [e.to_dict(lang=lang, review_movie_ids=review_movie_ids) for e in entries],
     })
 
 
