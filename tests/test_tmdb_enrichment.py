@@ -238,6 +238,7 @@ def test_apply_manual_matches_updates_movies_from_csv(tmp_path, monkeypatch):
 
     monkeypatch.setattr(enrichment, "Movie", FakeMovieModel)
     monkeypatch.setattr(enrichment.db, "session", fake_session)
+    monkeypatch.setattr(enrichment, "tmdb_configured", lambda: True)
     monkeypatch.setattr(
         "tools.enrich_tmdb_metadata.get_movie_detail",
         lambda tmdb_id, retries: {

@@ -69,7 +69,7 @@ def test_static_assets_are_cache_busted():
     template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
 
     assert '<link rel="stylesheet" href="/static/css/style.css?v=' in template
-    assert '<script src="/static/js/app.js?v=' in template
+    assert '<script defer src="/static/js/app.js?v=' in template
 
 
 def test_watchlist_default_comment_label_is_reason():
@@ -139,7 +139,7 @@ def test_gnb_logo_is_home_entrypoint_without_home_nav_button():
     css = (ROOT / "static" / "css" / "style.css").read_text(encoding="utf-8")
 
     assert 'id="gnb-home-btn"' in template
-    assert 'data-page="home"' not in template
+    assert 'class="gnb-btn" data-page="home"' not in template
     assert "$('gnb-home-btn').onclick = () => navigateTo('home');" in script
     assert ".gnb-btn span" in css
     assert "font-size: 16px;" in css
