@@ -96,8 +96,13 @@ class Entry(db.Model):
         ).first() is not None
         return 'rewatch' if has_review else 'wish'
 
-    def to_dict(self, lang='ko'):
-        watchlist_kind = self.watchlist_kind()
+    def to_dict(self, lang='ko', review_movie_ids=None):
+        if review_movie_ids is None:
+            watchlist_kind = self.watchlist_kind()
+        elif self.entry_type != 'watchlist':
+            watchlist_kind = None
+        else:
+            watchlist_kind = 'rewatch' if self.movie_id in review_movie_ids else 'wish'
         return {
             'id': self.id,
             'movie_id': self.movie_id,
