@@ -88,10 +88,12 @@ def test_watcha_api_header_filter_keeps_browser_context_headers():
 
 
 def test_collect_via_api_stops_after_consecutive_existing_items(monkeypatch):
-    monkeypatch.setattr(export, "_capture_frograms_headers", lambda page, kind, url: {"accept": "application/json"})
-    monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)
+    monkeypatch.setattr(
+        export,
+        "_capture_api_seed",
+        lambda page, kind, url: ({"accept": "application/json"}, api_payload(["mOld1", "mOld2"], next_uri="/api/next")),
+    )
     page = FakePage([
-        api_payload(["mOld1", "mOld2"], next_uri="/api/next"),
         api_payload(["mShouldNotFetch"]),
     ])
 
@@ -103,14 +105,16 @@ def test_collect_via_api_stops_after_consecutive_existing_items(monkeypatch):
     )
 
     assert [row.watcha_content_id for row in rows] == ["mOld1", "mOld2"]
-    assert len(page.request.urls) == 1
+    assert len(page.request.urls) == 0
 
 
 def test_collect_via_api_continues_when_new_item_resets_existing_streak(monkeypatch):
-    monkeypatch.setattr(export, "_capture_frograms_headers", lambda page, kind, url: {"accept": "application/json"})
-    monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)
+    monkeypatch.setattr(
+        export,
+        "_capture_api_seed",
+        lambda page, kind, url: ({"accept": "application/json"}, api_payload(["mOld1", "mNew", "mOld2"], next_uri="/api/next")),
+    )
     page = FakePage([
-        api_payload(["mOld1", "mNew", "mOld2"], next_uri="/api/next"),
         api_payload(["mOld3", "mOld4"]),
     ])
 
@@ -122,7 +126,7 @@ def test_collect_via_api_continues_when_new_item_resets_existing_streak(monkeypa
     )
 
     assert [row.watcha_content_id for row in rows] == ["mOld1", "mNew", "mOld2", "mOld3", "mOld4"]
-    assert len(page.request.urls) == 2
+    assert len(page.request.urls) == 1
 
 
 def test_collect_page_movies_api_only_fails_instead_of_scroll_fallback(monkeypatch):

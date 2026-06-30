@@ -483,22 +483,33 @@ def watcha_api_headers(headers: dict) -> dict:
     }
 
 
-def _capture_frograms_headers(page, kind: str, collection_url: str) -> dict:
-    """페이지를 한 번 열어 앱이 보내는 API 요청의 인증 관련 헤더를 캡처한다.
+def _is_watcha_collection_api(url: str, kind: str) -> bool:
+    return "/api/users/" in url and f"/{kind}" in url
+
+
+def _capture_api_seed(page, kind: str, collection_url: str) -> tuple[dict, Optional[dict]]:
+    """페이지를 한 번 열어 앱이 받은 첫 API 응답과 인증 관련 헤더를 캡처한다.
     device-identifier 등이 세션에 묶여 있으므로 하드코딩 대신 런타임 캡처가 안전하다.
     느린 VM/headless 에서도 요청이 뜰 때까지 최대 20초 대기(고정 sleep 대신)."""
 
-    def is_target(req):
-        return "/api/users/" in req.url and f"/{kind}" in req.url
+    def is_target(resp):
+        return _is_watcha_collection_api(resp.url, kind)
 
     try:
-        with page.expect_request(is_target, timeout=20000) as info:
+        with page.expect_response(is_target, timeout=20000) as info:
             page.goto(normalize_watchapedia_url(collection_url), wait_until="domcontentloaded")
-        req = info.value
+        resp = info.value
     except Exception:
-        return {}
+        return {}, None
 
-    return watcha_api_headers(req.headers)
+    ensure_logged_in(page)  # 세션 만료면 여기서 fail-fast(헤드리스/cron)
+    headers = watcha_api_headers(resp.request.headers)
+    if resp.status != 200:
+        print(f"API {kind} initial status {resp.status} — 중단")
+        if resp.status == 403:
+            print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
+        return headers, None
+    return headers, resp.json() or {}
 
 
 def _movie_from_api_item(item) -> Optional[ExportedMovie]:
@@ -530,30 +541,17 @@ def collect_via_api(
         return []
     uid, kind = m.group(1), m.group(2)
 
-    headers = _capture_frograms_headers(page, kind, collection_url)
-    ensure_logged_in(page)  # 세션 만료면 여기서 fail-fast(헤드리스/cron)
-    if not headers:
-        print("API 헤더 캡처 실패 — 스크롤로 폴백")
+    headers, payload = _capture_api_seed(page, kind, collection_url)
+    if not headers or not payload:
+        print("API 응답 캡처 실패 — 스크롤로 폴백")
         return []
 
     base = "https://pedia.watcha.com"
-    uri = f"/api/users/{uid}/contents/movies/{kind}?size=100&order=recent"
     movies = []
     consecutive_existing = 0
     existing_ids = existing_ids or set()
-    while uri:
-        resp = None
-        for attempt in range(4):
-            resp = page.request.get(base + uri, headers=headers)
-            if resp.status == 200:
-                break
-            page.wait_for_timeout(1500 * (attempt + 1))  # 일시적 오류(429/5xx) 백오프 후 재시도
-        if resp is None or resp.status != 200:
-            print(f"API {kind} status {resp.status if resp else '?'} — 중단(수집 {len(movies)})")
-            if resp is not None and resp.status == 403:
-                print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
-            break
-        result = (resp.json() or {}).get("result") or {}
+    while payload:
+        result = (payload or {}).get("result") or {}
         for item in result.get("result") or []:
             movie = _movie_from_api_item(item)
             if not movie:
@@ -567,6 +565,20 @@ def collect_via_api(
             print(f"API {kind} 조기 종료: 기존 항목 {consecutive_existing}개 연속 확인")
             break
         uri = result.get("next_uri")
+        if not uri:
+            break
+        resp = None
+        for attempt in range(4):
+            resp = page.request.get(base + uri, headers=headers)
+            if resp.status == 200:
+                break
+            page.wait_for_timeout(1500 * (attempt + 1))  # 일시적 오류(429/5xx) 백오프 후 재시도
+        if resp is None or resp.status != 200:
+            print(f"API {kind} status {resp.status if resp else '?'} — 중단(수집 {len(movies)})")
+            if resp is not None and resp.status == 403:
+                print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
+            break
+        payload = resp.json() or {}
         page.wait_for_timeout(300)  # 폴라이트 간격(rate-limit 회피)
 
     return unique_movies(movies)
