@@ -196,13 +196,17 @@ async function reopenRegisterFromHistory(s) {
 // ══════════════════════════════════════════════════════════════
 // HOME PAGE
 // ══════════════════════════════════════════════════════════════
+function homePerPage() {
+  return window.matchMedia('(max-width: 700px)').matches ? 20 : 40;
+}
+
 async function loadHome(reset = false) {
   if (reset) { state.homePage = 1; state.homeEntries = []; }
   $('home-loading').style.display = 'block';
 
   const params = new URLSearchParams({
     page: state.homePage,
-    per_page: 40,
+    per_page: homePerPage(),
     sort: state.homeSort,
     scope: 'home',
     lang: state.language,
@@ -1532,19 +1536,36 @@ function setSyncBtn(running) {
   b.title = running ? '왓챠 동기화 중…' : '왓챠 동기화';
 }
 
+function stopWatchaSyncPoll() {
+  if (!watchaSyncPoll) return;
+  clearInterval(watchaSyncPoll);
+  watchaSyncPoll = null;
+}
+
+function watchaSyncFailureMessage(status) {
+  const result = status?.result || status?.state || '오류';
+  const detail = status?.detail ? `: ${status.detail}` : '';
+  return `왓챠 동기화 실패 (${result})${detail}`;
+}
+
 async function pollWatchaSync() {
   let s;
   try { s = await API('/api/watcha/sync/status'); } catch (e) { return; }
+  if (s.available === false) {
+    stopWatchaSyncPoll();
+    setSyncBtn(false);
+    if (s.detail) showToast(s.detail, 'err');
+    return;
+  }
   setSyncBtn(!!s.running);
   if (s.running) {
     if (!watchaSyncPoll) watchaSyncPoll = setInterval(pollWatchaSync, 5000);
     return;
   }
   if (watchaSyncPoll) {
-    clearInterval(watchaSyncPoll);
-    watchaSyncPoll = null;
+    stopWatchaSyncPoll();
     const ok = s.result === 'success';
-    showToast(ok ? '왓챠 동기화 완료 🎬' : '왓챠 동기화 실패 (' + (s.result || '오류') + ')', ok ? 'ok' : 'err');
+    showToast(ok ? '왓챠 동기화 완료 🎬' : watchaSyncFailureMessage(s), ok ? 'ok' : 'err');
     if (ok) loadHome(true);
   }
 }
@@ -1557,7 +1578,7 @@ async function startWatchaSync() {
   let res;
   try { res = await API('/api/watcha/sync', { method: 'POST' }); }
   catch (e) { setSyncBtn(false); showToast('동기화 요청 실패', 'err'); return; }
-  if (res.status === 'unavailable') { setSyncBtn(false); showToast('이 환경에선 동기화 불가(배포 서버 전용)', 'err'); return; }
+  if (res.status === 'unavailable') { setSyncBtn(false); showToast(res.detail || '이 환경에선 동기화 불가(배포 서버 전용)', 'err'); return; }
   if (res.status === 'error') { setSyncBtn(false); showToast('동기화 시작 실패: ' + (res.detail || ''), 'err'); return; }
   if (res.status === 'already_running') showToast('이미 동기화 중…');
   if (!watchaSyncPoll) watchaSyncPoll = setInterval(pollWatchaSync, 5000);

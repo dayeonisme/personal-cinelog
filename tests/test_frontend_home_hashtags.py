@@ -72,6 +72,12 @@ def test_static_assets_are_cache_busted():
     assert '<script defer src="/static/js/app.js?v=' in template
 
 
+def test_template_preconnects_to_tmdb_images():
+    template = (ROOT / "templates" / "index.html").read_text(encoding="utf-8")
+
+    assert '<link rel="preconnect" href="https://image.tmdb.org" crossorigin>' in template
+
+
 def test_watchlist_default_comment_label_is_reason():
     script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
 
@@ -264,3 +270,26 @@ def test_home_page_has_load_more_pagination_button():
     assert "function loadMoreHome()" in home_section
     assert "state.homePage++;" in home_section
     assert "loadHome(false);" in home_section
+
+
+def test_home_page_uses_smaller_initial_page_size_on_mobile():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    helper_start = script.index("function homePerPage()")
+    helper_end = script.index("async function loadHome", helper_start)
+    helper = script[helper_start:helper_end]
+    home_start = script.index("async function loadHome")
+    home_end = script.index("// ══════════════════════════════════════════════════════════════\n// REVIEW PAGE", home_start)
+    home_section = script[home_start:home_end]
+
+    assert "matchMedia('(max-width: 700px)')" in helper
+    assert "? 20 : 40" in helper
+    assert "per_page: homePerPage()," in home_section
+
+
+def test_watcha_sync_start_uses_backend_unavailable_detail():
+    script = (ROOT / "static" / "js" / "app.js").read_text(encoding="utf-8")
+    start = script.index("async function startWatchaSync()")
+    end = script.index("(() => {", start)
+    section = script[start:end]
+
+    assert "showToast(res.detail || '이 환경에선 동기화 불가(배포 서버 전용)', 'err')" in section

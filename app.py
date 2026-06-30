@@ -273,6 +273,7 @@ def uploaded_file(filename):
 
 # ── 왓챠 수동 동기화 (systemd 서비스 트리거) ──────────────────────────────────
 WATCHA_SYNC_SERVICE = 'cinelog-watcha-sync.service'
+WATCHA_UNAVAILABLE_DETAIL = 'systemd 환경 아님: 왓챠 동기화 버튼은 VM/systemd 배포에서만 실행됩니다.'
 
 
 def _systemctl(args):
@@ -285,13 +286,24 @@ def _systemctl(args):
         return None
 
 
+def _watcha_sync_detail(state, props):
+    result = props.get('Result', '')
+    if state == 'failed' or (result and result not in {'success', 'done'}):
+        return (
+            '동기화 서비스가 실패했습니다. '
+            '서버에서 journalctl -u cinelog-watcha-sync -n 80 --no-pager 로 '
+            '세션 만료/CAPTCHA/설정 파일 오류를 확인하세요.'
+        )
+    return ''
+
+
 @app.route('/api/watcha/sync', methods=['POST'])
 def start_watcha_sync():
     """버튼 → 동기화 서비스를 비차단으로 시작. 이미 실행 중이면 409.
     배포 환경에서만 동작(systemd + sudoers). 로컬/미배포면 503."""
     active = _systemctl(['is-active', WATCHA_SYNC_SERVICE])
     if active is None:
-        return jsonify({'status': 'unavailable', 'detail': 'systemd 환경 아님'}), 503
+        return jsonify({'status': 'unavailable', 'detail': WATCHA_UNAVAILABLE_DETAIL}), 503
     if active.stdout.strip() in ('active', 'activating'):
         return jsonify({'status': 'already_running'}), 409
     try:
@@ -310,10 +322,17 @@ def start_watcha_sync():
 def watcha_sync_status():
     active = _systemctl(['is-active', WATCHA_SYNC_SERVICE])
     if active is None:
-        return jsonify({'available': False, 'running': False})
+        return jsonify({'available': False, 'running': False, 'detail': WATCHA_UNAVAILABLE_DETAIL})
     state = active.stdout.strip()
     props = {}
-    show = _systemctl(['show', WATCHA_SYNC_SERVICE, '-p', 'Result', '-p', 'InactiveEnterTimestamp'])
+    show = _systemctl([
+        'show',
+        WATCHA_SYNC_SERVICE,
+        '-p', 'Result',
+        '-p', 'ExecMainCode',
+        '-p', 'ExecMainStatus',
+        '-p', 'InactiveEnterTimestamp',
+    ])
     if show is not None:
         for line in show.stdout.splitlines():
             if '=' in line:
@@ -324,7 +343,10 @@ def watcha_sync_status():
         'running': state in ('active', 'activating'),
         'state': state,
         'result': props.get('Result', ''),
+        'exec_main_code': props.get('ExecMainCode', ''),
+        'exec_main_status': props.get('ExecMainStatus', ''),
         'finished_at': props.get('InactiveEnterTimestamp', ''),
+        'detail': _watcha_sync_detail(state, props),
     })
 
 
@@ -700,9 +722,14 @@ def _upsert_comment_template(name):
 
 
 # ── Run ───────────────────────────────────────────────────────────────────────
+def server_options():
+    return {
+        'host': os.environ.get('HOST', '127.0.0.1'),
+        'port': int(os.environ.get('PORT', '5001')),
+        'debug': os.environ.get('FLASK_DEBUG', '0') == '1',
+    }
+
+
 if __name__ == '__main__':
     # HOST=0.0.0.0 으로 실행하면 같은 와이파이의 다른 기기(휴대폰 등)에서도 접속 가능합니다.
-    host = os.environ.get('HOST', '127.0.0.1')
-    port = int(os.environ.get('PORT', '5001'))
-    debug = os.environ.get('FLASK_DEBUG', '1') == '1'
-    app.run(host=host, port=port, debug=debug)
+    app.run(**server_options())
