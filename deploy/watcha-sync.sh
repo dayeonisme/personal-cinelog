@@ -31,6 +31,35 @@ if [ ! -f "$STATE" ]; then
   exit 1
 fi
 
+mkdir -p data
+RATINGS_EXISTING_IDS="$APPDIR/data/watchapedia_existing_ratings.txt"
+WATCHLIST_EXISTING_IDS="$APPDIR/data/watchapedia_existing_watchlist.txt"
+"$PY" - <<'PY'
+from pathlib import Path
+
+from app import app
+from models import Entry, Movie
+
+out = Path("data")
+out.mkdir(exist_ok=True)
+
+with app.app_context():
+    for entry_type, filename in (
+        ("review", "watchapedia_existing_ratings.txt"),
+        ("watchlist", "watchapedia_existing_watchlist.txt"),
+    ):
+        rows = (
+            Movie.query.join(Entry)
+            .filter(Entry.entry_type == entry_type, Movie.imdb_id.like("watcha:%"))
+            .with_entities(Movie.imdb_id)
+            .distinct()
+            .all()
+        )
+        ids = sorted(row[0].split(":", 1)[1] for row in rows if row[0])
+        (out / filename).write_text("\n".join(ids) + ("\n" if ids else ""), encoding="utf-8")
+        print(f"기존 {entry_type} 왓챠 ID {len(ids)}개 기록: {out / filename}")
+PY
+
 # headless 는 왓챠 봇감지로 앱이 API 호출을 안 해 헤더 캡처가 안 됨.
 # xvfb 가상 디스플레이 + headful 로 실제 브라우저처럼 동작시켜야 API 요청이 떠 헤더를 캡처.
 # (수집 자체는 API 페이징(HTTP)이라 가볍고, 브라우저는 첫 페이지 1회 로드만.)
@@ -39,6 +68,9 @@ xvfb-run -a "$PY" tools/export_watchapedia.py \
   --storage-state "$STATE" \
   --ratings-url "$WATCHA_RATINGS_URL" \
   --watchlist-url "$WATCHA_WATCHLIST_URL" \
+  --ratings-existing-ids "$RATINGS_EXISTING_IDS" \
+  --watchlist-existing-ids "$WATCHLIST_EXISTING_IDS" \
+  --stop-after-existing 100 \
   --out-dir data
 
 echo "[$(date -Is)] import 시작 (--commit)"

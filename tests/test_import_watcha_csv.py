@@ -65,6 +65,30 @@ def test_import_skips_duplicate_review_by_imdb_id(tmp_path):
         assert Movie.query.count() == 1
 
 
+def test_import_updates_existing_watcha_rating_value(tmp_path):
+    configure_test_db(tmp_path)
+    first = write_csv(
+        tmp_path / "first.csv",
+        "source,title,year,rating,watcha_content_id,watcha_url,imdb_id\n"
+        "watchapedia,헤어질 결심,2022,3.0,md123,https://pedia.watcha.com/ko-KR/contents/md123,tt12477480\n",
+    )
+    updated = write_csv(
+        tmp_path / "updated.csv",
+        "source,title,year,rating,watcha_content_id,watcha_url,imdb_id\n"
+        "watchapedia,헤어질 결심,2022,4.5,md123,https://pedia.watcha.com/ko-KR/contents/md123,tt12477480\n",
+    )
+
+    with app.app_context():
+        import_watcha_csvs(ratings_csv=first, watchlist_csv=None, commit=True)
+        result = import_watcha_csvs(ratings_csv=updated, watchlist_csv=None, commit=True)
+
+        assert result.inserted_reviews == 0
+        assert result.updated_reviews == 1
+        assert result.skipped_duplicates == 0
+        assert Entry.query.count() == 1
+        assert RatingModule.query.one().value == 4.5
+
+
 def test_import_keeps_same_title_movies_with_different_watcha_ids(tmp_path):
     configure_test_db(tmp_path)
     ratings = write_csv(

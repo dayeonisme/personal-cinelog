@@ -1,6 +1,7 @@
 import argparse
 import sys
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Optional, Union
 
@@ -23,6 +24,7 @@ from tools.watcha_csv import (
 @dataclass
 class ImportResult:
     inserted_reviews: int = 0
+    updated_reviews: int = 0
     inserted_watchlist: int = 0
     skipped_duplicates: int = 0
     invalid_rows: int = 0
@@ -90,10 +92,24 @@ def movie_has_entry(movie: Movie, entry_type: Optional[str] = None) -> bool:
     return query.first() is not None
 
 
+def existing_entry(movie: Movie, entry_type: str) -> Optional[Entry]:
+    return Entry.query.filter_by(movie_id=movie.id, entry_type=entry_type).first()
+
+
 def import_rating(row: WatchaRatingRow, result: ImportResult) -> None:
     movie = get_or_create_movie(row)
-    if movie_has_entry(movie, "review"):
-        result.skipped_duplicates += 1
+    entry = existing_entry(movie, "review")
+    if entry:
+        watcha_rating = RatingModule.query.filter_by(
+            entry_id=entry.id,
+            name="왓챠 별점",
+        ).first()
+        if watcha_rating and watcha_rating.value != row.rating:
+            watcha_rating.value = row.rating
+            entry.updated_at = datetime.utcnow()
+            result.updated_reviews += 1
+        else:
+            result.skipped_duplicates += 1
         return
 
     entry = Entry(movie_id=movie.id, entry_type="review", watch_status="completed")
@@ -130,7 +146,13 @@ def import_watcha_csvs(
     result = ImportResult()
 
     if ratings_csv:
+        seen_rating_keys = set()
         for row in parse_ratings_csv(ratings_csv):
+            row_key = make_local_movie_id(row.imdb_id, row.watcha_content_id) or f"{normalize_title(row.title)}:{row.year}"
+            if row_key in seen_rating_keys:
+                result.skipped_duplicates += 1
+                continue
+            seen_rating_keys.add(row_key)
             import_rating(row, result)
 
     if watchlist_csv:
@@ -160,6 +182,7 @@ def main() -> None:
     mode = "committed" if args.commit else "dry run"
     print(f"Mode: {mode}")
     print(f"Inserted reviews: {result.inserted_reviews}")
+    print(f"Updated reviews: {result.updated_reviews}")
     print(f"Inserted watchlist: {result.inserted_watchlist}")
     print(f"Skipped duplicates: {result.skipped_duplicates}")
     print(f"Invalid rows: {result.invalid_rows}")

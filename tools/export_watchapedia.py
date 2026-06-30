@@ -105,6 +105,20 @@ def unique_movies(movies: Iterable[ExportedMovie]) -> list:
     return unique
 
 
+def load_existing_watcha_ids(path: Optional[Path]) -> set[str]:
+    if not path or not path.exists():
+        return set()
+    ids = set()
+    for line in path.read_text(encoding="utf-8").splitlines():
+        value = line.strip()
+        if not value:
+            continue
+        if value.startswith("watcha:"):
+            value = value.split(":", 1)[1]
+        ids.add(value)
+    return ids
+
+
 def movie_key(movie: ExportedMovie) -> str:
     return movie.watcha_content_id or movie.watcha_url
 
@@ -472,8 +486,30 @@ def _capture_frograms_headers(page, kind: str, collection_url: str) -> dict:
     }
 
 
-def collect_via_api(page, collection_url: str) -> list:
-    """Watcha 내부 API(next_uri 페이징)로 전량 수집. 스크롤보다 완전·안정."""
+def _movie_from_api_item(item) -> Optional[ExportedMovie]:
+    c = item.get("content") or {}
+    if c.get("content_type") not in (None, "movies"):
+        return None
+    code = c.get("code") or ""
+    if not code:
+        return None
+    rating = (item.get("user_content_action") or {}).get("rating")
+    return ExportedMovie(
+        title=(c.get("title") or "").strip(),
+        year=str(c.get("year")) if c.get("year") else "",
+        rating=(rating / 2.0) if isinstance(rating, (int, float)) else None,
+        watcha_content_id=code,
+        watcha_url=f"https://pedia.watcha.com/ko/contents/{code}",
+    )
+
+
+def collect_via_api(
+    page,
+    collection_url: str,
+    existing_ids: Optional[set[str]] = None,
+    stop_after_existing: int = 0,
+) -> list:
+    """Watcha 내부 API(next_uri 페이징)로 수집. known IDs가 있으면 최근순에서 조기 종료."""
     m = re.search(r"/users/([^/?#]+)/contents/movies/(ratings|wishes|doings)", collection_url)
     if not m:
         return []
@@ -487,7 +523,9 @@ def collect_via_api(page, collection_url: str) -> list:
 
     base = "https://pedia.watcha.com"
     uri = f"/api/users/{uid}/contents/movies/{kind}?size=100&order=recent"
-    raw = []
+    movies = []
+    consecutive_existing = 0
+    existing_ids = existing_ids or set()
     while uri:
         resp = None
         for attempt in range(4):
@@ -496,39 +534,44 @@ def collect_via_api(page, collection_url: str) -> list:
                 break
             page.wait_for_timeout(1500 * (attempt + 1))  # 일시적 오류(429/5xx) 백오프 후 재시도
         if resp is None or resp.status != 200:
-            print(f"API {kind} status {resp.status if resp else '?'} — 중단(수집 {len(raw)})")
+            print(f"API {kind} status {resp.status if resp else '?'} — 중단(수집 {len(movies)})")
             break
         result = (resp.json() or {}).get("result") or {}
-        raw.extend(result.get("result") or [])
+        for item in result.get("result") or []:
+            movie = _movie_from_api_item(item)
+            if not movie:
+                continue
+            movies.append(movie)
+            if movie.watcha_content_id in existing_ids:
+                consecutive_existing += 1
+            else:
+                consecutive_existing = 0
+        if existing_ids and stop_after_existing and consecutive_existing >= stop_after_existing:
+            print(f"API {kind} 조기 종료: 기존 항목 {consecutive_existing}개 연속 확인")
+            break
         uri = result.get("next_uri")
         page.wait_for_timeout(300)  # 폴라이트 간격(rate-limit 회피)
 
-    movies = []
-    for it in raw:
-        c = it.get("content") or {}
-        if c.get("content_type") not in (None, "movies"):
-            continue
-        code = c.get("code") or ""
-        if not code:
-            continue
-        rating = (it.get("user_content_action") or {}).get("rating")
-        movies.append(
-            ExportedMovie(
-                title=(c.get("title") or "").strip(),
-                year=str(c.get("year")) if c.get("year") else "",
-                rating=(rating / 2.0) if isinstance(rating, (int, float)) else None,
-                watcha_content_id=code,
-                watcha_url=f"https://pedia.watcha.com/ko/contents/{code}",
-            )
-        )
     return unique_movies(movies)
 
 
-def collect_page_movies(page, url: str, pause_seconds: float, stable_rounds: int) -> list:
+def collect_page_movies(
+    page,
+    url: str,
+    pause_seconds: float,
+    stable_rounds: int,
+    existing_ids: Optional[set[str]] = None,
+    stop_after_existing: int = 0,
+) -> list:
     print(f"Opening {url}")
     # API 우선(완전·안정). 실패 시에만 스크롤 폴백.
     try:
-        movies = collect_via_api(page, url)
+        movies = collect_via_api(
+            page,
+            url,
+            existing_ids=existing_ids,
+            stop_after_existing=stop_after_existing,
+        )
         if movies:
             print(f"API 수집: {len(movies)} rows from {url}")
             return movies
@@ -551,6 +594,14 @@ def main() -> None:
     parser.add_argument("--ratings-url", help="WatchaPedia URL for rated movies.")
     parser.add_argument("--watchlist-url", help="WatchaPedia URL for watchlist movies.")
     parser.add_argument("--out-dir", type=Path, default=Path("data"))
+    parser.add_argument("--ratings-existing-ids", type=Path)
+    parser.add_argument("--watchlist-existing-ids", type=Path)
+    parser.add_argument(
+        "--stop-after-existing",
+        type=int,
+        default=100,
+        help="Stop recent-ordered API paging after this many known items in a row. Use 0 for full scan.",
+    )
     # 추출이 빨라져 다음 배치 로딩 전에 조기 종료되지 않도록 인내심을 키운다.
     parser.add_argument("--pause-seconds", type=float, default=2.0)
     parser.add_argument("--stable-rounds", type=int, default=10)
@@ -574,6 +625,8 @@ def main() -> None:
     _PASSWORD = os.environ.get("WATCHA_PASSWORD")
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
+    ratings_existing_ids = load_existing_watcha_ids(args.ratings_existing_ids)
+    watchlist_existing_ids = load_existing_watcha_ids(args.watchlist_existing_ids)
 
     from playwright.sync_api import sync_playwright
 
@@ -600,14 +653,24 @@ def main() -> None:
             ratings_rows = [
                 row
                 for row in collect_page_movies(
-                    page, args.ratings_url, args.pause_seconds, args.stable_rounds
+                    page,
+                    args.ratings_url,
+                    args.pause_seconds,
+                    args.stable_rounds,
+                    existing_ids=ratings_existing_ids,
+                    stop_after_existing=args.stop_after_existing,
                 )
                 if row.rating is not None
             ]
 
         if args.watchlist_url:
             watchlist_rows = collect_page_movies(
-                page, args.watchlist_url, args.pause_seconds, args.stable_rounds
+                page,
+                args.watchlist_url,
+                args.pause_seconds,
+                args.stable_rounds,
+                existing_ids=watchlist_existing_ids,
+                stop_after_existing=args.stop_after_existing,
             )
 
         if args.profile_url:
