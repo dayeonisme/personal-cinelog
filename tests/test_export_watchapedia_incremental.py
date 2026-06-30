@@ -26,9 +26,16 @@ class FakeRequest:
 class FakePage:
     def __init__(self, responses):
         self.request = FakeRequest(responses)
+        self.fallback_used = False
 
     def wait_for_timeout(self, _ms):
         return None
+
+    def goto(self, url, wait_until=None):
+        self.fallback_used = True
+
+    def wait_for_load_state(self, state):
+        self.fallback_used = True
 
 
 def api_payload(codes, next_uri=None):
@@ -94,3 +101,25 @@ def test_collect_via_api_continues_when_new_item_resets_existing_streak(monkeypa
 
     assert [row.watcha_content_id for row in rows] == ["mOld1", "mNew", "mOld2", "mOld3", "mOld4"]
     assert len(page.request.urls) == 2
+
+
+def test_collect_page_movies_api_only_fails_instead_of_scroll_fallback(monkeypatch):
+    monkeypatch.setattr(export, "collect_via_api", lambda *args, **kwargs: [])
+    monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)
+    monkeypatch.setattr(export, "collect_scrolling_movies", lambda *args, **kwargs: [])
+    page = FakePage([])
+
+    try:
+        export.collect_page_movies(
+            page,
+            "https://pedia.watcha.com/ko-KR/users/u1/contents/movies/ratings",
+            pause_seconds=0,
+            stable_rounds=0,
+            api_only=True,
+        )
+    except RuntimeError as exc:
+        assert "API 수집 실패" in str(exc)
+    else:
+        raise AssertionError("api_only should fail instead of falling back to scroll")
+
+    assert page.fallback_used is False

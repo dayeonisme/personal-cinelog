@@ -562,6 +562,7 @@ def collect_page_movies(
     stable_rounds: int,
     existing_ids: Optional[set[str]] = None,
     stop_after_existing: int = 0,
+    api_only: bool = False,
 ) -> list:
     print(f"Opening {url}")
     # API 우선(완전·안정). 실패 시에만 스크롤 폴백.
@@ -575,10 +576,14 @@ def collect_page_movies(
         if movies:
             print(f"API 수집: {len(movies)} rows from {url}")
             return movies
+        if api_only:
+            raise RuntimeError("API 수집 실패: 배포 동기화에서는 스크롤 폴백을 사용하지 않습니다.")
         print("API 결과 없음 — 스크롤 폴백")
     except SystemExit:
         raise
     except Exception as exc:
+        if api_only:
+            raise RuntimeError(f"API 수집 실패: {exc}") from exc
         print(f"API 수집 예외({exc}) — 스크롤 폴백")
     page.goto(url, wait_until="domcontentloaded")
     ensure_logged_in(page)
@@ -613,6 +618,11 @@ def main() -> None:
     parser.add_argument(
         "--storage-state",
         help="portable 세션 JSON 경로(쿠키 평문). 있으면 프로필 대신 이걸로 로그인 상태를 이식(OS 무관).",
+    )
+    parser.add_argument(
+        "--api-only",
+        action="store_true",
+        help="Do not fall back to slow scrolling when the Watcha API path fails.",
     )
     args = parser.parse_args()
 
@@ -659,6 +669,7 @@ def main() -> None:
                     args.stable_rounds,
                     existing_ids=ratings_existing_ids,
                     stop_after_existing=args.stop_after_existing,
+                    api_only=args.api_only,
                 )
                 if row.rating is not None
             ]
@@ -671,6 +682,7 @@ def main() -> None:
                 args.stable_rounds,
                 existing_ids=watchlist_existing_ids,
                 stop_after_existing=args.stop_after_existing,
+                api_only=args.api_only,
             )
 
         if args.profile_url:

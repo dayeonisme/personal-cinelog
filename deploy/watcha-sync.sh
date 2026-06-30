@@ -63,14 +63,15 @@ PY
 # headless 는 왓챠 봇감지로 앱이 API 호출을 안 해 헤더 캡처가 안 됨.
 # xvfb 가상 디스플레이 + headful 로 실제 브라우저처럼 동작시켜야 API 요청이 떠 헤더를 캡처.
 # (수집 자체는 API 페이징(HTTP)이라 가볍고, 브라우저는 첫 페이지 1회 로드만.)
-echo "[$(date -Is)] export 시작 (xvfb headful + API + storage-state)"
-xvfb-run -a "$PY" tools/export_watchapedia.py \
+echo "[$(date -Is)] export 시작 (xvfb headful + API-only + storage-state)"
+timeout 240 xvfb-run -a "$PY" -u tools/export_watchapedia.py \
   --storage-state "$STATE" \
   --ratings-url "$WATCHA_RATINGS_URL" \
   --watchlist-url "$WATCHA_WATCHLIST_URL" \
   --ratings-existing-ids "$RATINGS_EXISTING_IDS" \
   --watchlist-existing-ids "$WATCHLIST_EXISTING_IDS" \
   --stop-after-existing 100 \
+  --api-only \
   --out-dir data
 
 echo "[$(date -Is)] import 시작 (--commit)"
