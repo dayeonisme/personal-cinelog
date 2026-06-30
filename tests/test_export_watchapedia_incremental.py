@@ -65,6 +65,28 @@ def test_load_existing_watcha_ids_accepts_prefixed_and_plain_ids(tmp_path):
     assert export.load_existing_watcha_ids(path) == {"mKnown", "mPlain"}
 
 
+def test_watcha_api_header_filter_keeps_browser_context_headers():
+    headers = export.watcha_api_headers({
+        "accept": "application/json",
+        "accept-language": "ko-KR,ko;q=0.9",
+        "user-agent": "Mozilla/5.0",
+        "referer": "https://pedia.watcha.com/ko-KR/users/u/contents/movies/ratings",
+        "x-frograms-app-code": "watcha_web",
+        "cookie": "session=secret",
+        "host": "pedia.watcha.com",
+        "content-length": "0",
+    })
+
+    assert headers == {
+        "accept": "application/json",
+        "accept-language": "ko-KR,ko;q=0.9",
+        "user-agent": "Mozilla/5.0",
+        "referer": "https://pedia.watcha.com/ko-KR/users/u/contents/movies/ratings",
+        "x-frograms-app-code": "watcha_web",
+        "cookie": "session=secret",
+    }
+
+
 def test_collect_via_api_stops_after_consecutive_existing_items(monkeypatch):
     monkeypatch.setattr(export, "_capture_frograms_headers", lambda page, kind, url: {"accept": "application/json"})
     monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)

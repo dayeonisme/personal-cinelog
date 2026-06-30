@@ -464,8 +464,27 @@ def collect_profile_collection(
     return rows
 
 
+API_HEADER_ALLOWLIST = {
+    "accept",
+    "accept-language",
+    "authorization",
+    "cookie",
+    "origin",
+    "referer",
+    "user-agent",
+}
+
+
+def watcha_api_headers(headers: dict) -> dict:
+    return {
+        k: v
+        for k, v in headers.items()
+        if k.lower().startswith("x-frograms") or k.lower() in API_HEADER_ALLOWLIST
+    }
+
+
 def _capture_frograms_headers(page, kind: str, collection_url: str) -> dict:
-    """페이지를 한 번 열어 앱이 보내는 API 요청의 x-frograms-* / accept 헤더를 캡처한다.
+    """페이지를 한 번 열어 앱이 보내는 API 요청의 인증 관련 헤더를 캡처한다.
     device-identifier 등이 세션에 묶여 있으므로 하드코딩 대신 런타임 캡처가 안전하다.
     느린 VM/headless 에서도 요청이 뜰 때까지 최대 20초 대기(고정 sleep 대신)."""
 
@@ -479,11 +498,7 @@ def _capture_frograms_headers(page, kind: str, collection_url: str) -> dict:
     except Exception:
         return {}
 
-    return {
-        k: v
-        for k, v in req.headers.items()
-        if k.lower().startswith("x-frograms") or k.lower() == "accept"
-    }
+    return watcha_api_headers(req.headers)
 
 
 def _movie_from_api_item(item) -> Optional[ExportedMovie]:
@@ -535,6 +550,8 @@ def collect_via_api(
             page.wait_for_timeout(1500 * (attempt + 1))  # 일시적 오류(429/5xx) 백오프 후 재시도
         if resp is None or resp.status != 200:
             print(f"API {kind} status {resp.status if resp else '?'} — 중단(수집 {len(movies)})")
+            if resp is not None and resp.status == 403:
+                print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
             break
         result = (resp.json() or {}).get("result") or {}
         for item in result.get("result") or []:
