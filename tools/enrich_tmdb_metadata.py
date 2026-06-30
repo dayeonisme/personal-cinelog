@@ -294,8 +294,28 @@ def get_movie_detail(tmdb_id: int, retries: int) -> Dict:
     )
 
 
-def target_movies(limit: Optional[int], only_missing_poster: bool, start_id: Optional[int]):
+def load_movie_ids(path: Optional[Path]) -> Optional[list[int]]:
+    if not path:
+        return None
+    ids = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        value = line.strip()
+        if value:
+            ids.append(int(value))
+    return ids
+
+
+def target_movies(
+    limit: Optional[int],
+    only_missing_poster: bool,
+    start_id: Optional[int],
+    movie_ids: Optional[list[int]] = None,
+):
     query = Movie.query.filter(Movie.imdb_id.like("watcha:%"))
+    if movie_ids is not None:
+        if not movie_ids:
+            return []
+        query = query.filter(Movie.id.in_(movie_ids))
     if start_id:
         query = query.filter(Movie.id >= start_id)
     if only_missing_poster:
@@ -346,12 +366,18 @@ def enrich_movies(
     start_id: Optional[int],
     retries: int,
     strict_unique_year: bool = False,
+    movie_ids: Optional[list[int]] = None,
 ) -> EnrichResult:
     if not tmdb_configured():
         raise RuntimeError("TMDb API credential is not configured.")
 
     result = EnrichResult()
-    movies = target_movies(limit=limit, only_missing_poster=only_missing_poster, start_id=start_id)
+    movies = target_movies(
+        limit=limit,
+        only_missing_poster=only_missing_poster,
+        start_id=start_id,
+        movie_ids=movie_ids,
+    )
     report_path.parent.mkdir(parents=True, exist_ok=True)
 
     with report_path.open("w", newline="", encoding="utf-8") as f:
@@ -648,6 +674,7 @@ def main() -> None:
     parser.add_argument("--progress-every", type=int, default=50)
     parser.add_argument("--only-missing-poster", action="store_true")
     parser.add_argument("--start-id", type=int)
+    parser.add_argument("--movie-ids-file", type=Path)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--strict-unique-year", action="store_true")
     parser.add_argument("--manual-matches", type=Path)
@@ -683,6 +710,7 @@ def main() -> None:
                 start_id=args.start_id,
                 retries=args.retries,
                 strict_unique_year=args.strict_unique_year,
+                movie_ids=load_movie_ids(args.movie_ids_file),
             )
 
     print(f"Mode: {'committed' if args.commit else 'dry run'}")

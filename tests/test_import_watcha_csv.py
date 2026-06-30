@@ -89,6 +89,34 @@ def test_import_updates_existing_watcha_rating_value(tmp_path):
         assert RatingModule.query.one().value == 4.5
 
 
+def test_import_writes_changed_movie_ids_report(tmp_path):
+    configure_test_db(tmp_path)
+    ratings = write_csv(
+        tmp_path / "ratings.csv",
+        "source,title,year,rating,watcha_content_id,watcha_url,imdb_id\n"
+        "watchapedia,새 평가,2026,4.0,mNewReview,https://pedia.watcha.com/ko-KR/contents/mNewReview,\n",
+    )
+    watchlist = write_csv(
+        tmp_path / "watchlist.csv",
+        "source,title,year,watcha_content_id,watcha_url,imdb_id\n"
+        "watchapedia,새 보고싶어요,2026,mNewWish,https://pedia.watcha.com/ko-KR/contents/mNewWish,\n",
+    )
+    changed_ids = tmp_path / "changed_movie_ids.txt"
+
+    with app.app_context():
+        result = import_watcha_csvs(
+            ratings_csv=ratings,
+            watchlist_csv=watchlist,
+            commit=True,
+            changed_movie_ids_path=changed_ids,
+        )
+
+        assert result.inserted_reviews == 1
+        assert result.inserted_watchlist == 1
+        ids = {int(line) for line in changed_ids.read_text(encoding="utf-8").splitlines()}
+        assert ids == {movie.id for movie in Movie.query.all()}
+
+
 def test_import_keeps_same_title_movies_with_different_watcha_ids(tmp_path):
     configure_test_db(tmp_path)
     ratings = write_csv(

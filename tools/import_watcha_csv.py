@@ -28,6 +28,16 @@ class ImportResult:
     inserted_watchlist: int = 0
     skipped_duplicates: int = 0
     invalid_rows: int = 0
+    changed_movie_ids: list[int] = None
+
+    def __post_init__(self):
+        if self.changed_movie_ids is None:
+            self.changed_movie_ids = []
+
+
+def mark_changed_movie(result: ImportResult, movie: Movie) -> None:
+    if movie.id not in result.changed_movie_ids:
+        result.changed_movie_ids.append(movie.id)
 
 
 def find_movie(imdb_id: str, title: str, year: str) -> Optional[Movie]:
@@ -108,6 +118,7 @@ def import_rating(row: WatchaRatingRow, result: ImportResult) -> None:
             watcha_rating.value = row.rating
             entry.updated_at = datetime.utcnow()
             result.updated_reviews += 1
+            mark_changed_movie(result, movie)
         else:
             result.skipped_duplicates += 1
         return
@@ -126,6 +137,7 @@ def import_rating(row: WatchaRatingRow, result: ImportResult) -> None:
         )
     )
     result.inserted_reviews += 1
+    mark_changed_movie(result, movie)
 
 
 def import_watchlist(row: WatchaWatchlistRow, result: ImportResult) -> None:
@@ -136,12 +148,14 @@ def import_watchlist(row: WatchaWatchlistRow, result: ImportResult) -> None:
 
     db.session.add(Entry(movie_id=movie.id, entry_type="watchlist", watch_status=None))
     result.inserted_watchlist += 1
+    mark_changed_movie(result, movie)
 
 
 def import_watcha_csvs(
     ratings_csv: Optional[Path],
     watchlist_csv: Optional[Path],
     commit: bool = False,
+    changed_movie_ids_path: Optional[Path] = None,
 ) -> ImportResult:
     result = ImportResult()
 
@@ -164,6 +178,14 @@ def import_watcha_csvs(
     else:
         db.session.rollback()
 
+    if changed_movie_ids_path:
+        changed_movie_ids_path.parent.mkdir(parents=True, exist_ok=True)
+        changed_movie_ids_path.write_text(
+            "\n".join(str(mid) for mid in sorted(result.changed_movie_ids))
+            + ("\n" if result.changed_movie_ids else ""),
+            encoding="utf-8",
+        )
+
     return result
 
 
@@ -174,10 +196,16 @@ def main() -> None:
     parser.add_argument("--ratings", type=Path)
     parser.add_argument("--watchlist", type=Path)
     parser.add_argument("--commit", action="store_true")
+    parser.add_argument("--changed-movie-ids-out", type=Path)
     args = parser.parse_args()
 
     with app.app_context():
-        result = import_watcha_csvs(args.ratings, args.watchlist, commit=args.commit)
+        result = import_watcha_csvs(
+            args.ratings,
+            args.watchlist,
+            commit=args.commit,
+            changed_movie_ids_path=args.changed_movie_ids_out,
+        )
 
     mode = "committed" if args.commit else "dry run"
     print(f"Mode: {mode}")
@@ -186,6 +214,7 @@ def main() -> None:
     print(f"Inserted watchlist: {result.inserted_watchlist}")
     print(f"Skipped duplicates: {result.skipped_duplicates}")
     print(f"Invalid rows: {result.invalid_rows}")
+    print(f"Changed movies: {len(result.changed_movie_ids)}")
 
 
 if __name__ == "__main__":

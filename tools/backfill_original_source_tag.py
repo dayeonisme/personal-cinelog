@@ -36,6 +36,7 @@ def main() -> None:
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--sleep", type=float, default=0.1)
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--movie-ids-file", type=Path)
     ap.add_argument("--progress-every", type=int, default=25)
     ap.add_argument("--commit-every", type=int, default=200,
                     help="N개 원작영화 처리마다 중간 커밋(중단/재실행 시 이어감)")
@@ -43,7 +44,15 @@ def main() -> None:
 
     with app.app_context():
         tag = _get_or_create_tag()
-        movies = Movie.query.filter(Movie.tmdb_id.isnot(None)).all()
+        query = Movie.query.filter(Movie.tmdb_id.isnot(None))
+        if args.movie_ids_file:
+            movie_ids = [
+                int(line.strip())
+                for line in args.movie_ids_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            query = query.filter(Movie.id.in_(movie_ids)) if movie_ids else query.filter(False)
+        movies = query.all()
 
         checked = qualified = api_calls = tagged = 0
         cache = {}

@@ -85,6 +85,7 @@ def main() -> None:
     ap.add_argument("--storage-state", required=True)
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--limit", type=int)
+    ap.add_argument("--movie-ids-file", type=Path)
     # choose_match 는 정확 제목/원제 매칭만 반환(퍼지 없음). 80=exact_original_title
     # (원제 정확, 연도만 재개봉/지역차로 어긋남) 까지 신뢰. 연도 일치는 100이라 우선됨.
     ap.add_argument("--threshold", type=int, default=80)
@@ -103,6 +104,13 @@ def main() -> None:
         query = Movie.query.filter(
             Movie.imdb_id.like("watcha:%"), Movie.poster_url.is_(None)
         ).order_by(Movie.id)
+        if args.movie_ids_file:
+            movie_ids = [
+                int(line.strip())
+                for line in args.movie_ids_file.read_text(encoding="utf-8").splitlines()
+                if line.strip()
+            ]
+            query = query.filter(Movie.id.in_(movie_ids)) if movie_ids else query.filter(False)
         if args.limit:
             query = query.limit(args.limit)
         movies = query.all()
