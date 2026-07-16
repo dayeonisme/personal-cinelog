@@ -83,25 +83,26 @@ echo "[$(date -Is)] import 시작 (--commit)"
   --changed-movie-ids-out "$CHANGED_MOVIE_IDS"
 
 CHANGED_COUNT="$(grep -c '^[0-9]' "$CHANGED_MOVIE_IDS" 2>/dev/null || true)"
+
+# 1차 보강: 변경 여부와 무관하게 항상 전체 스윕.
+# --movie-ids-file 없이 poster_url IS NULL 전체를 타겟 → 과거 실패분도 매 sync 재시도.
+echo "[$(date -Is)] TMDb 보강 1차 (한국어 제목, 전체 누락 스윕)"
+"$PY" tools/enrich_tmdb_metadata.py --only-missing-poster --commit --sleep 0.3 || \
+  echo "  (1차 보강 일부 실패 — TMDb 일시 오류일 수 있음)"
+
+# 2차 보강: 브라우저로 왓챠 원제+연도 취득 후 TMDb 재매칭.
+# --limit 30: 매 sync 최대 30개만 처리해 실행 시간 제한 (나머지는 다음 sync 때).
+echo "[$(date -Is)] TMDb 보강 2차 (왓챠 원제, 전체 누락 스윕 최대 30개)"
+xvfb-run -a "$PY" tools/enrich_via_watcha_detail.py --storage-state "$STATE" --limit 30 --commit --sleep 0.2 || \
+  echo "  (2차 보강 실패 — xvfb/세션 확인 필요)"
+
 if [ "${CHANGED_COUNT:-0}" -eq 0 ]; then
-  echo "[$(date -Is)] 신규/변경 영화 없음 — TMDb 보강/태그 백필 생략"
+  echo "[$(date -Is)] 신규/변경 영화 없음 — 태그 백필 생략"
   echo "[$(date -Is)] 동기화 완료"
   exit 0
 fi
 
-LIMIT="$CHANGED_COUNT"
-echo "[$(date -Is)] 신규/변경 영화 ${CHANGED_COUNT}개만 후속 보강"
-
-# 새로 들어온 bare 영화(포스터 없음)에 TMDb 메타데이터(포스터/감독/배우/러닝타임/장르) 보강.
-# imdb_id LIKE 'watcha:%' AND poster_url IS NULL 만 타겟 → 기존 보강분은 건드리지 않음.
-echo "[$(date -Is)] TMDb 보강 1차 (한국어 제목)"
-"$PY" tools/enrich_tmdb_metadata.py --only-missing-poster --movie-ids-file "$CHANGED_MOVIE_IDS" --commit --sleep 0.3 || \
-  echo "  (보강 일부 실패 — TMDb 일시 오류일 수 있음, 다음 실행 때 재시도됨)"
-
-# 1차에서 못 잡은 잔여는 왓챠 content API 의 원제+연도로 재매칭(브라우저 필요 → xvfb).
-echo "[$(date -Is)] TMDb 보강 2차 (왓챠 원제 기반)"
-xvfb-run -a "$PY" tools/enrich_via_watcha_detail.py --storage-state "$STATE" --movie-ids-file "$CHANGED_MOVIE_IDS" --commit --sleep 0.2 || \
-  echo "  (원제 보강 일부 실패 — 다음 실행 때 재시도됨)"
+echo "[$(date -Is)] 신규/변경 영화 ${CHANGED_COUNT}개 태그 백필"
 
 # 원작(소설/만화 등) 있는 작품의 신규 엔트리에 '원작존재' 해시태그 백필(멱등).
 echo "[$(date -Is)] 원작존재 해시태그 백필"

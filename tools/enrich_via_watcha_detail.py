@@ -130,7 +130,7 @@ def main() -> None:
             if not headers:
                 print("왓챠 API 헤더 캡처 실패 — 중단(xvfb/세션 확인)")
                 browser.close()
-                return
+                sys.exit(1)
 
             for movie in movies:
                 checked += 1
