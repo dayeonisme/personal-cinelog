@@ -33,6 +33,8 @@ const state = {
   selectedHashtags: [],
 };
 
+const statusBadgeMap = { completed: '완료', in_progress: '진행중', stopped: '중단' };
+
 // ── Helpers ────────────────────────────────────────────────────
 const API = async (path, opts = {}) => {
   const r = await fetch(path, { headers: { 'Content-Type': 'application/json' }, ...opts });
@@ -256,6 +258,9 @@ function renderHomeGrid() {
     const ratingHtml = rating != null
       ? `<div class="movie-card-overlay-rating">⭐ ${rating.toFixed(1)}</div>`
       : '';
+    const statusHtml = entry.entry_type === 'review' && entry.watch_status
+      ? `<span class="entry-status-badge status-${entry.watch_status}">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`
+      : '';
     return `
       <div class="movie-card ${typeClass}" data-entry-id="${entry.id}" onclick="navigateToMovie(${m.id})">
         ${poster}
@@ -263,6 +268,7 @@ function renderHomeGrid() {
         <div class="movie-card-overlay">
           <div class="movie-card-overlay-title">${escHtml(m.title_ko)} ${year}</div>
           ${director ? `<div class="movie-card-overlay-sub">${escHtml(director)}</div>` : ''}
+          ${statusHtml}
           ${ratingHtml}
         </div>
       </div>`;
@@ -376,7 +382,6 @@ function buildEntryCard(entry) {
         <strong>${escHtml(m.title)}</strong>
       </div>`;
 
-  const statusBadgeMap = { completed: '완료', in_progress: '진행중', stopped: '중단' };
   const statusBadge = entry.watch_status
     ? `<span class="entry-status-badge status-${entry.watch_status}">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`
     : '';
@@ -1296,8 +1301,22 @@ function removeCommentImage(btn, url) {
 // ══════════════════════════════════════════════════════════════
 $('submit-entry-btn').onclick = submitEntry;
 
+let entrySubmitInFlight = false;
+
 async function submitEntry() {
   if (!state.selectedMovie) return;
+  if (entrySubmitInFlight) return;
+  entrySubmitInFlight = true;
+  $('submit-entry-btn').disabled = true;
+  try {
+    await doSubmitEntry();
+  } finally {
+    entrySubmitInFlight = false;
+    $('submit-entry-btn').disabled = false;
+  }
+}
+
+async function doSubmitEntry() {
   const type = state.registerType;
 
   const watchStatus = type === 'review'

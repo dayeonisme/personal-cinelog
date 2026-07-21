@@ -359,6 +359,10 @@ img { display: block; }
 }
 .movie-card-overlay-rating .star-disp { font-size: 14px; vertical-align: -2px; margin-right: 6px; }
 
+.movie-card-overlay .entry-status-badge {
+  font-size: 10px; padding: 2px 8px; margin-top: 6px; background: rgba(0,0,0,0.4);
+}
+
 .movie-card-type-badge {
   position: absolute; top: 7px; left: 7px;
   font-family: var(--font-mono); font-size: 9px; letter-spacing: 0.06em;
@@ -1087,6 +1091,7 @@ img { display: block; }
   .sort-select { padding: 6px 10px; font-size: 13px; margin-left: auto; }
   /* iOS 입력 포커스 시 자동 확대 방지(16px+) */
   input, select, textarea { font-size: 16px; }
+  .module-name-select, .module-name-input { font-size: 16px; }
 
   /* FAB — 엄지 닿는 위치 */
   .fab { bottom: 22px; right: 18px; width: 52px; height: 52px; line-height: 52px; font-size: 28px; }
