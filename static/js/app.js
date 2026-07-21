@@ -258,14 +258,10 @@ function renderHomeGrid() {
     const ratingHtml = rating != null
       ? `<div class="movie-card-overlay-rating">⭐ ${rating.toFixed(1)}</div>`
       : '';
-    const statusHtml = entry.entry_type === 'review' && entry.watch_status
-      ? `<span class="movie-card-status-badge status-${entry.watch_status}">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`
-      : '';
     return `
       <div class="movie-card ${typeClass}" data-entry-id="${entry.id}" onclick="navigateToMovie(${m.id})">
         ${poster}
         <span class="movie-card-type-badge">${typeBadge}</span>
-        ${statusHtml}
         <div class="movie-card-overlay">
           <div class="movie-card-overlay-title">${escHtml(m.title_ko)} ${year}</div>
           ${director ? `<div class="movie-card-overlay-sub">${escHtml(director)}</div>` : ''}
