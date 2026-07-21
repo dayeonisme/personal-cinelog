@@ -565,10 +565,13 @@ function buildMovieDetailEntrySection(kind, title, entry) {
   const isReview = kind === 'review';
   const ratingsHtml = isReview ? buildRatingsHtml(entry.ratings) : '';
   const commentsHtml = buildCommentsHtml(entry.comments);
+  const statusBadge = isReview && entry.watch_status
+    ? `<span class="entry-status-badge status-${entry.watch_status}">${statusBadgeMap[entry.watch_status] || entry.watch_status}</span>`
+    : '';
   return `
     <div class="movie-detail-section ${kind}">
       <div class="movie-detail-section-header">
-        <h2 class="movie-detail-section-title">${escHtml(title)}</h2>
+        <h2 class="movie-detail-section-title">${escHtml(title)}${statusBadge}</h2>
         <div class="movie-detail-section-actions">
           <button type="button" class="movie-detail-edit-btn" onclick="editEntry(${entry.id})">수정</button>
           <button type="button" class="movie-detail-delete-btn" onclick="confirmDelete(${entry.id})">삭제</button>
