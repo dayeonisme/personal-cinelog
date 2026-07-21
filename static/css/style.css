@@ -1139,4 +1139,14 @@ img { display: block; }
   /* 본문이 탭바에 안 가리게 + FAB 를 탭바 위로 */
   .page { padding-bottom: 78px; }
   .fab { bottom: 72px; right: 18px; }
+
+  /* 평가/보고싶어요 리스트 카드 축소 */
+  .entry-card { padding: 16px; }
+  .entry-card-inner { gap: 14px; }
+  .entry-poster,
+  .entry-poster-placeholder { width: 72px; height: 108px; }
+  .entry-movie-name { font-size: 19px; }
+  .entry-meta-line { font-size: 12px; }
+  .kebab-btn { top: 10px; right: 10px; }
+  .kebab-menu { top: 34px; right: 10px; }
 }
