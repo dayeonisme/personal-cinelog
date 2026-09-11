@@ -512,6 +512,30 @@ def _capture_api_seed(page, kind: str, collection_url: str) -> tuple[dict, Optio
     return headers, resp.json() or {}
 
 
+_FETCH_FORBIDDEN_HEADERS = {"cookie", "origin", "referer", "user-agent"}
+
+
+def _fetch_via_page(page, url: str, headers: dict) -> tuple[int, Optional[dict]]:
+    """브라우저 fetch()로 실행. cookie/origin/referer/user-agent/sec-fetch-* 는
+    브라우저가 실제 탐색 컨텍스트 기준으로 자동 부착 — page.request.get 은 이 헤더들이
+    빠져서 왓챠 anti-bot 이 매번 같은 지점(첫 페이징)에서 403 처리했다."""
+    safe_headers = {k: v for k, v in headers.items() if k.lower() not in _FETCH_FORBIDDEN_HEADERS}
+    result = page.evaluate(
+        """async ([url, headers]) => {
+            try {
+                const res = await fetch(url, {headers, credentials: 'include'});
+                let body = null;
+                try { body = await res.json(); } catch (e) {}
+                return {status: res.status, body};
+            } catch (e) {
+                return {status: 0, body: null};
+            }
+        }""",
+        [url, safe_headers],
+    )
+    return result.get("status", 0), result.get("body")
+
+
 def _movie_from_api_item(item) -> Optional[ExportedMovie]:
     c = item.get("content") or {}
     if c.get("content_type") not in (None, "movies"):
@@ -567,18 +591,18 @@ def collect_via_api(
         uri = result.get("next_uri")
         if not uri:
             break
-        resp = None
+        status, next_payload = 0, None
         for attempt in range(4):
-            resp = page.request.get(base + uri, headers=headers)
-            if resp.status == 200:
+            status, next_payload = _fetch_via_page(page, base + uri, headers)
+            if status == 200:
                 break
             page.wait_for_timeout(1500 * (attempt + 1))  # 일시적 오류(429/5xx) 백오프 후 재시도
-        if resp is None or resp.status != 200:
-            print(f"API {kind} status {resp.status if resp else '?'} — 중단(수집 {len(movies)})")
-            if resp is not None and resp.status == 403:
+        if status != 200 or next_payload is None:
+            print(f"API {kind} status {status or '?'} — 중단(수집 {len(movies)})")
+            if status == 403:
                 print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
             break
-        payload = resp.json() or {}
+        payload = next_payload
         page.wait_for_timeout(300)  # 폴라이트 간격(rate-limit 회피)
 
     return unique_movies(movies)
