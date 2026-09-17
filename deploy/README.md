@@ -41,13 +41,30 @@ gcloud compute scp .env <VM_NAME>:~/movie-review/.env --zone=<ZONE>
 
 ## 4. 데이터(평가 DB + 업로드 이미지) 전송
 
-DB·이미지는 `.gitignore` 라 clone 으로 안 따라온다. Mac 에서:
+DB·이미지는 `.gitignore` 라 clone 으로 안 따라온다.
+기존 VM 데이터를 덮어쓸 때는 먼저 VM에서 앱을 중지하고 백업한다.
+왓챠 동기화를 설치했다면 타이머를 먼저 중지하고, 실행 중인 동기화가 끝난 뒤 진행한다.
+
+```bash
+# VM 안에서
+sudo systemctl stop cinelog-watcha-sync.timer  # 설치한 경우
+systemctl is-active cinelog-watcha-sync.service  # active이면 종료될 때까지 기다림
+sudo systemctl stop cinelog
+cd ~/movie-review
+python3 tools/backup_sqlite.py movies.db "movies.db.bak-before-transfer-$(date +%Y%m%d-%H%M%S)"
+# 다른 DB 사용 프로세스도 없는 상태에서 기존 WAL을 DB에 모두 반영
+python3 -c 'import sqlite3; c = sqlite3.connect("movies.db"); print(c.execute("PRAGMA journal_mode=DELETE").fetchone()); c.close()'
+```
+
+이후 Mac에서 전송한다. `push-data.sh`는 SQLite backup API로 WAL의 최신 데이터까지
+포함한 독립 스냅샷을 만들어 전송한다.
 
 ```bash
 # Mac 에서, 레포 루트에서
 deploy/push-data.sh <VM_NAME> <ZONE>
 # 그 뒤 VM 에서
 sudo systemctl restart cinelog
+sudo systemctl start cinelog-watcha-sync.timer  # 설치한 경우
 ```
 
 ## 5. 휴대폰에서 접속
@@ -74,7 +91,16 @@ sudo systemctl restart cinelog
 
 - **데이터 정본은 VM 한 곳.** Mac 로컬에서도 따로 실행하면 DB 가 갈라져 평가가 따로 쌓인다. Mac 에서도 위 tailscale 주소로 접속할 것.
 - 서비스 관리: `sudo systemctl {status|restart|stop} cinelog`, 로그: `journalctl -u cinelog -f`
-- 코드 업데이트: VM 에서 `git pull` 후 `sudo systemctl restart cinelog`
+- 코드 업데이트: VM 에서 `git pull` 후 `bash deploy/setup-vm.sh` 실행.
+  `uv sync --locked`로 의존성을 맞추고 systemd 설정을 다시 설치·재시작한다.
+- Gunicorn은 워커 1개 + `gthread` 스레드 4개로 요청을 동시에 처리한다.
+- `?v=...`가 붙은 정적파일은 `max-age=31536000`(1년)로 캐시한다.
+  JS/CSS 변경 시 `templates/index.html`의 버전을 반드시 갱신한다.
+  HTML/API와 버전 없는 정적파일에는 장기 캐시를 적용하지 않는다.
+- HTML·JS·CSS·JSON은 클라이언트 지원에 따라 Brotli/gzip으로 압축한다(500바이트 이상).
+- SQLite 연결 시 WAL 모드를 활성화한다. 실행 중 DB 백업은 `cp` 대신
+  `python3 tools/backup_sqlite.py movies.db "movies.db.bak-$(date +%Y%m%d-%H%M%S)"` 사용.
+  최초 WAL 적용 전에도 이 명령으로 백업한다. `movies.db-wal` 파일을 임의로 삭제하지 않는다.
 - gunicorn 이 Flask debug 없이 구동 → 디버거 노출 위험 없음.
 - 부팅 직후 잠깐 cinelog 가 죽어있을 수 있음(Tailscale 올라오기 전엔 fail-closed 로 종료 후 재시도). 몇 초 뒤 자동 복구.
 - RAM 부족(OOM) 시: swap 자동 생성됨. 그래도 모자라면 `journalctl -u cinelog` 에서 OOM 확인 → 최후수단 머신 e2-small 업그레이드(Always Free 깨짐).

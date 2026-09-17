@@ -11,7 +11,6 @@
     cd /path/to/personal-cinelog
     python3 tools/rename_hashtag.py
 """
-import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -23,6 +22,7 @@ if str(ROOT_DIR) not in sys.path:
 from app import app
 from database import db
 from models import Hashtag
+from tools.backup_sqlite import backup_database
 
 OLD_NAME = "원작 소설"
 NEW_NAME = "원작 존재"
@@ -44,7 +44,7 @@ def main():
         db_path = ROOT_DIR / "movies.db"
         if db_path.exists():
             backup_path = ROOT_DIR / f"movies.db.bak-before-rename-hashtag-{datetime.now():%Y%m%d-%H%M%S}"
-            shutil.copy2(db_path, backup_path)
+            backup_database(db_path, backup_path)
             print(f"백업 생성: {backup_path.name}")
 
         count = len(old_tag.entries) if hasattr(old_tag, "entries") else None

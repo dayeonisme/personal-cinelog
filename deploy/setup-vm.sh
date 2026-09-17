@@ -13,7 +13,7 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 echo "==> 가상환경 + 의존성 (uv sync)"
-uv sync
+uv sync --locked
 
 echo "==> swap 확인/생성 (e2-micro RAM 1GB 보호, OOM 방지)"
 if swapon --show | grep -q .; then
@@ -31,7 +31,8 @@ echo "==> systemd 서비스 등록 (user=$USER, dir=$APPDIR)"
 sed -e "s|__USER__|$USER|g" -e "s|__APPDIR__|$APPDIR|g" deploy/cinelog.service \
   | sudo tee /etc/systemd/system/cinelog.service >/dev/null
 sudo systemctl daemon-reload
-sudo systemctl enable --now cinelog
+sudo systemctl enable cinelog
+sudo systemctl restart cinelog
 
 echo "==> 상태"
 sudo systemctl --no-pager status cinelog | head -8

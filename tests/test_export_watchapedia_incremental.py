@@ -3,30 +3,16 @@ from pathlib import Path
 import tools.export_watchapedia as export
 
 
-class FakeResponse:
-    status = 200
-
-    def __init__(self, payload):
-        self.payload = payload
-
-    def json(self):
-        return self.payload
-
-
-class FakeRequest:
+class FakePage:
     def __init__(self, responses):
         self.responses = list(responses)
         self.urls = []
-
-    def get(self, url, headers=None):
-        self.urls.append(url)
-        return FakeResponse(self.responses.pop(0))
-
-
-class FakePage:
-    def __init__(self, responses):
-        self.request = FakeRequest(responses)
         self.fallback_used = False
+
+    def evaluate(self, _script, args):
+        url, _headers = args
+        self.urls.append(url)
+        return {'status': 200, 'body': self.responses.pop(0)}
 
     def wait_for_timeout(self, _ms):
         return None
@@ -105,7 +91,7 @@ def test_collect_via_api_stops_after_consecutive_existing_items(monkeypatch):
     )
 
     assert [row.watcha_content_id for row in rows] == ["mOld1", "mOld2"]
-    assert len(page.request.urls) == 0
+    assert len(page.urls) == 0
 
 
 def test_collect_via_api_continues_when_new_item_resets_existing_streak(monkeypatch):
@@ -126,7 +112,7 @@ def test_collect_via_api_continues_when_new_item_resets_existing_streak(monkeypa
     )
 
     assert [row.watcha_content_id for row in rows] == ["mOld1", "mNew", "mOld2", "mOld3", "mOld4"]
-    assert len(page.request.urls) == 1
+    assert page.urls == ['https://pedia.watcha.com/api/next']
 
 
 def test_collect_page_movies_api_only_fails_instead_of_scroll_fallback(monkeypatch):

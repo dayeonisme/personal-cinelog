@@ -6,6 +6,7 @@ import subprocess
 from datetime import datetime
 from flask import Flask, request, jsonify, send_from_directory, render_template
 from flask_cors import CORS
+from flask_compress import Compress
 from database import db
 from models import Movie, Entry, RatingModule, CommentModule, RatingTemplate, CommentTemplate, Hashtag
 from werkzeug.utils import secure_filename
@@ -37,11 +38,33 @@ TMDB_API_KEY = os.environ.get('TMDB_API_KEY')
 TMDB_API_BASE = 'https://api.themoviedb.org/3'
 TMDB_IMAGE_BASE = 'https://image.tmdb.org/t/p/w342'
 
-app = Flask(__name__, template_folder='templates', static_folder='static')
+class CinelogFlask(Flask):
+    def get_send_file_max_age(self, filename):
+        # Only versioned assets can safely stay fresh across deployments.
+        if request.endpoint == 'static' and request.args.get('v'):
+            return 365 * 24 * 60 * 60
+        return super().get_send_file_max_age(filename)
+
+    def send_static_file(self, filename):
+        response = super().send_static_file(filename)
+        # Flask-Compress's streaming path does not support gzip. Buffer the
+        # small JS/CSS assets so HTTP-only clients can use gzip as well.
+        if response.status_code == 200 and response.mimetype in {
+            'text/javascript', 'application/javascript', 'text/css',
+        }:
+            response.direct_passthrough = False
+            response.get_data()
+        return response
+
+
+app = CinelogFlask(__name__, template_folder='templates', static_folder='static')
 app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(BASE_DIR, 'movies.db')}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB upload limit
+app.config['COMPRESS_ALGORITHM'] = ['br', 'gzip']
+app.config['COMPRESS_STREAMS'] = False
 CORS(app)
+Compress(app)
 db.init_app(app)
 
 

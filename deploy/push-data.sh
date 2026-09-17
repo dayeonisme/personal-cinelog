@@ -14,8 +14,14 @@ ZONE_ARG=()
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
-echo "==> DB 전송"
-gcloud compute scp "${ZONE_ARG[@]}" movies.db "$VM:$REMOTE_DIR/movies.db"
+# 원격 cinelog 및 watcha-sync 서비스/타이머를 먼저 중지해야 한다(README 참고).
+# 실행 중인 로컬 DB는 WAL에 최신 데이터가 있을 수 있으므로 스냅샷을 전송한다.
+SNAPSHOT_DIR="$(mktemp -d)"
+trap 'rm -rf "$SNAPSHOT_DIR"' EXIT
+python3 tools/backup_sqlite.py movies.db "$SNAPSHOT_DIR/movies.db"
+
+echo "==> DB 스냅샷 전송"
+gcloud compute scp "${ZONE_ARG[@]}" "$SNAPSHOT_DIR/movies.db" "$VM:$REMOTE_DIR/movies.db"
 
 if [ -d static/uploads ] && [ -n "$(ls -A static/uploads 2>/dev/null)" ]; then
   echo "==> 업로드 이미지 전송"

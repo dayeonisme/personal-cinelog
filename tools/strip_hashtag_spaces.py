@@ -16,7 +16,6 @@
     python3 tools/strip_hashtag_spaces.py
 """
 import re
-import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -28,6 +27,7 @@ if str(ROOT_DIR) not in sys.path:
 from app import app
 from database import db
 from models import Entry, Hashtag
+from tools.backup_sqlite import backup_database
 
 WHITESPACE_RE = re.compile(r"\s+")
 
@@ -42,7 +42,7 @@ def main():
         db_path = ROOT_DIR / "movies.db"
         if db_path.exists():
             backup_path = ROOT_DIR / f"movies.db.bak-before-strip-hashtag-spaces-{datetime.now():%Y%m%d-%H%M%S}"
-            shutil.copy2(db_path, backup_path)
+            backup_database(db_path, backup_path)
             print(f"백업 생성: {backup_path.name}")
 
         for tag in targets:

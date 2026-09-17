@@ -19,7 +19,6 @@
     python3 tools/merge_movie_duplicates.py --dry-run  # 미리보기만 (DB 변경 없음)
 """
 import argparse
-import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +30,7 @@ if str(ROOT_DIR) not in sys.path:
 from app import app
 from database import db
 from models import Entry, Movie
+from tools.backup_sqlite import backup_database
 
 # (옮길 movie_id, 합쳐질 대상 movie_id, 표시용 라벨)
 MERGE_PAIRS = [
@@ -48,7 +48,7 @@ def main():
         db_path = ROOT_DIR / "movies.db"
         if not args.dry_run and db_path.exists():
             backup_path = ROOT_DIR / f"movies.db.bak-before-merge-duplicates-{datetime.now():%Y%m%d-%H%M%S}"
-            shutil.copy2(db_path, backup_path)
+            backup_database(db_path, backup_path)
             print(f"백업 생성: {backup_path.name}")
 
         for old_id, keep_id, label in MERGE_PAIRS:
