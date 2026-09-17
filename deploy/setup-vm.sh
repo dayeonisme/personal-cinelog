@@ -6,14 +6,14 @@ set -euo pipefail
 APPDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$APPDIR"
 
-echo "==> 시스템 패키지 설치"
-sudo apt-get update -y
-sudo apt-get install -y python3-venv python3-pip
+echo "==> uv 설치 (없으면)"
+if ! command -v uv >/dev/null 2>&1; then
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+  export PATH="$HOME/.local/bin:$PATH"
+fi
 
-echo "==> 가상환경 + 의존성"
-python3 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install -r requirements.txt
+echo "==> 가상환경 + 의존성 (uv sync)"
+uv sync
 
 echo "==> swap 확인/생성 (e2-micro RAM 1GB 보호, OOM 방지)"
 if swapon --show | grep -q .; then

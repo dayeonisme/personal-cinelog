@@ -8,7 +8,7 @@ if [ -f .env ]; then
   set +a
 fi
 
-pip install -r requirements.txt -q
+uv sync --quiet
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -16,4 +16,4 @@ echo "  CINELOG  ·  http://localhost:5001"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 
-python app.py
+uv run python app.py

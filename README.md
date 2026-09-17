@@ -85,9 +85,9 @@ deploy/push-data.sh <VM이름> <zone>
 ```bash
 git clone https://github.com/dayeonisme/personal-cinelog.git
 cd personal-cinelog
-pip3 install -r requirements.txt
+uv sync
 export TMDB_ACCESS_TOKEN="발급받은_Read_Access_Token"   # 또는 export TMDB_API_KEY="..."
-python app.py        # http://localhost:5001
+uv run python app.py        # http://localhost:5001
 ```
 
 TMDb 키 발급: [TMDb API 문서](https://developer.themoviedb.org/docs/getting-started) 에서 계정 생성 후 API Read Access Token(또는 v3 API Key) 발급. 영구 적용은 `~/.zshrc` 또는 `.env` 에 저장.
@@ -111,10 +111,10 @@ personal-cinelog/
 ├── app.py                    # Flask 앱 & REST API (왓챠 동기화 트리거 포함)
 ├── models.py                 # SQLAlchemy 모델
 ├── database.py               # DB 초기화
-├── requirements.txt
+├── pyproject.toml / uv.lock  # 의존성 정의(uv)
 ├── deploy/                   # GCP + Tailscale 배포 + 왓챠 자동 동기화
 │   ├── README.md             # 배포 전체 절차 + 보안 체크리스트
-│   ├── setup-vm.sh           # VM 셋업(venv·swap·systemd)
+│   ├── setup-vm.sh           # VM 셋업(uv·swap·systemd)
 │   ├── cinelog.service       # gunicorn systemd 서비스(Tailscale IP 바인딩)
 │   ├── push-data.sh          # Mac → VM 데이터(DB·이미지) 전송
 │   ├── watcha-sync.sh        # 왓챠 동기화 파이프라인

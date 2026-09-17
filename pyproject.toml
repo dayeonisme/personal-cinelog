@@ -1,0 +1,18 @@
+[project]
+name = "personal-cinelog"
+version = "0.1.0"
+description = "개인용 영화 평가·보고싶어요 기록 웹앱"
+requires-python = ">=3.9"
+dependencies = [
+    "flask>=3.0",
+    "flask-sqlalchemy>=3.1",
+    "flask-cors>=4.0",
+    "requests>=2.31",
+    "werkzeug>=3.0",
+    "gunicorn>=21.0",
+    "pytest>=8.0",
+    "playwright>=1.44",
+]
+
+[tool.uv]
+package = false
