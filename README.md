@@ -184,7 +184,7 @@ Movie
 ## TMDb 출처 표기
 
 <a href="https://www.themoviedb.org/">
-  <img src="https://www.themoviedb.org/assets/2/v4/logos/v2/blue_square_2-d537fb228cf3ded904ef09b136fe3fec72548ebc1fea3fbbd1ad9e36364db38b.svg" alt="The Movie Database (TMDB)" width="120">
+  <img src="docs/assets/tmdb-logo.svg" alt="The Movie Database (TMDB)" width="120">
 </a>
 
 이 제품은 TMDb API를 사용하지만, TMDb의 보증이나 인증을 받은 것은 아닙니다.
@@ -192,21 +192,6 @@ Movie
 Cinelog는 영화 검색과 표시를 위해 [The Movie Database (TMDB)](https://www.themoviedb.org/)에서 제공하는 영화 메타데이터와 포스터 이미지를 사용합니다. TMDb 로고와 출처 표기 가이드는 공식 [Logos & Attribution](https://www.themoviedb.org/about/logos-attribution) 페이지에서 확인할 수 있습니다.
 
 원문 고지: This product uses the TMDB API but is not endorsed or certified by TMDB.
-
----
-
-## 커밋하지 않는 파일 (.gitignore)
-
-| 파일 | 이유 |
-|------|------|
-| `*.db`, `*.db-journal` | 개인 영화 기록 DB |
-| `static/uploads/*` | 사용자 첨부 이미지 |
-| `.env`, `*.env` | TMDb 키 등 환경 변수 |
-| `watcha_state.json` | 왓챠 세션(평문 쿠키) |
-| `.watchapedia-browser/` | 왓챠 브라우저 프로필 |
-| `AGENTS.md` | 로컬 에이전트 지침 |
-
-> 배포 VM 의 `~/.cinelog-watcha.env`(왓챠 동기화 URL 등)는 레포 밖에 두며 `chmod 600` 으로 보호한다.
 
 ---
 

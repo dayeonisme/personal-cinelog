@@ -32,7 +32,6 @@ static/uploads/*
 data/
 .watchapedia-browser/
 .playwright-mcp/
-AGENTS.md
 .worktrees/
 
 # macOS
