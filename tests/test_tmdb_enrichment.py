@@ -301,3 +301,33 @@ def test_extract_detail_year_from_watchapedia_detail_text_ignores_numeric_title(
 """
 
     assert extract_detail_year_from_text(text) == "2019"
+
+
+def test_search_queries_for_title_includes_spaceless_variant():
+    assert "디어헌터" in search_queries_for_title("디어 헌터")
+
+
+def test_choose_match_rejects_tied_distinct_movies():
+    result = choose_match(
+        title="메트로폴리스",
+        year=None,
+        results=[
+            {"id": 19, "title": "메트로폴리스", "release_date": "1927-01-10"},
+            {"id": 9606, "title": "메트로폴리스", "release_date": "2001-05-26"},
+        ],
+    )
+
+    assert result is None
+
+
+def test_search_movie_does_not_send_year_filter(monkeypatch):
+    captured = {}
+
+    def fake_get(path, params, retries):
+        captured.update(params)
+        return {"results": []}
+
+    monkeypatch.setattr(enrichment, "tmdb_get", fake_get)
+    enrichment.search_movie("기생충", "2019", retries=0)
+
+    assert "year" not in captured

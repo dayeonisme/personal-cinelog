@@ -94,13 +94,16 @@ def search_queries_for_title(title: str) -> list:
     add(re.sub(r"(리마스터링|리마스터|감독판|디렉터스\s*컷)", "", title))
     add(re.sub(r"^극장판\s+", "", title))
     add(title.replace("Ⅱ", "2").replace("Ⅰ", "1").replace("Ⅲ", "3"))
+    # TMDb 검색이 공백 유무에 민감한 제목이 있다 (예: "디어 헌터" 검색 시
+    # 실제 등록명 "디어헌터"가 결과에 안 잡힘). 공백 제거 버전도 시도.
+    add(re.sub(r"\s+", "", title))
     return candidates
 
 
 def choose_match(title: str, year: Optional[str], results: Iterable[Dict]) -> Optional[MatchResult]:
     normalized_title = normalize_title(title)
     canonical_source = canonical_title(title)
-    best: Optional[MatchResult] = None
+    candidates: list[MatchResult] = []
 
     for item in results:
         item_title = normalize_title(item.get("title") or "")
@@ -139,16 +142,26 @@ def choose_match(title: str, year: Optional[str], results: Iterable[Dict]) -> Op
             score = 80
             reason = "exact_original_title"
 
-        candidate = MatchResult(
+        candidates.append(MatchResult(
             tmdb_id=int(item["id"]),
             score=score,
             reason=reason,
             item=item,
-        )
-        if best is None or candidate.score > best.score:
-            best = candidate
+        ))
 
-    return best
+    if not candidates:
+        return None
+
+    best_score = max(c.score for c in candidates)
+    top = [c for c in candidates if c.score == best_score]
+    distinct_ids = {c.tmdb_id for c in top}
+    if len(distinct_ids) > 1:
+        # 같은 제목의 서로 다른 작품(리메이크/동명이인)이 동점으로 걸린 경우.
+        # 연도로도 못 가르면 검색결과 순서(TMDb 인기순)에 기대 아무거나 고르느니
+        # 매칭 실패로 두고 수동 확인에 맡긴다 (예: "메트로폴리스" 1927 vs 2001).
+        return None
+
+    return top[0]
 
 
 def detail_to_updates(data: Dict) -> Dict[str, Optional[str]]:
@@ -232,6 +245,10 @@ def tmdb_get(path: str, params: Dict, retries: int) -> Dict:
 
 
 def search_movie(title: str, year: Optional[str], retries: int) -> Dict:
+    # TMDb의 year 파라미터는 서버단에서 해당 연도로 결과를 필터링해버려,
+    # 개봉 연기 등으로 DB 등록 연도와 실제 release_date 연도가 1년 이상
+    # 어긋난 작품은 애초에 후보에서 빠진다. year는 API 요청에 넘기지 않고
+    # choose_match의 ±1년 매칭 로직에서만 사용한다.
     params = {
         "query": title,
         "language": "ko-KR",
@@ -239,8 +256,6 @@ def search_movie(title: str, year: Optional[str], retries: int) -> Dict:
         "include_adult": "false",
         "page": 1,
     }
-    if year:
-        params["year"] = year
     return tmdb_get("/search/movie", params, retries=retries)
 
 
