@@ -135,3 +135,52 @@ def test_collect_page_movies_api_only_fails_instead_of_scroll_fallback(monkeypat
         raise AssertionError("api_only should fail instead of falling back to scroll")
 
     assert page.fallback_used is False
+
+
+def test_capture_api_seed_retries_after_timeout(monkeypatch):
+    monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)
+
+    class FakeResponse:
+        url = "https://pedia.watcha.com/api/users/u1/contents/movies/ratings"
+        status = 200
+
+        class request:
+            headers = {"accept": "application/json"}
+
+        def json(self):
+            return {"result": {"result": []}}
+
+    class Waiter:
+        def __init__(self, page):
+            self.page = page
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.page.calls += 1
+            if self.page.calls == 1:
+                raise TimeoutError("no response")
+            return False
+
+        @property
+        def value(self):
+            return FakeResponse()
+
+    class SeedPage:
+        calls = 0
+
+        def expect_response(self, predicate, timeout):
+            return Waiter(self)
+
+        def goto(self, url, wait_until):
+            pass
+
+    page = SeedPage()
+    headers, payload = export._capture_api_seed(
+        page, "ratings", "https://pedia.watcha.com/ko-KR/users/u1/contents/movies/ratings"
+    )
+
+    assert page.calls == 2
+    assert headers == {"accept": "application/json"}
+    assert payload == {"result": {"result": []}}

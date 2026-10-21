@@ -55,15 +55,21 @@ def _strip_edition(title: str) -> str:
     return text.strip()
 
 
-def _capture_headers(page, sample_code: str) -> dict:
+def _capture_headers(page, sample_code: str, attempts: int = 3) -> dict:
     def is_target(req):
         return "/api/contents/" in req.url
 
-    try:
-        with page.expect_request(is_target, timeout=20000) as info:
-            page.goto(f"{WATCHA_BASE}/ko/contents/{sample_code}", wait_until="domcontentloaded")
-        req = info.value
-    except Exception:
+    # 느린 VM 에서 간헐적으로 요청이 늦게 떠서 타임아웃만 재시도한다.
+    req = None
+    for attempt in range(attempts):
+        try:
+            with page.expect_request(is_target, timeout=45000) as info:
+                page.goto(f"{WATCHA_BASE}/ko/contents/{sample_code}", wait_until="domcontentloaded")
+            req = info.value
+            break
+        except Exception as exc:
+            print(f"왓챠 헤더 캡처 실패 ({attempt + 1}/{attempts}): {type(exc).__name__}")
+    if req is None:
         return {}
     return {
         k: v for k, v in req.headers.items()

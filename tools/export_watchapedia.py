@@ -487,19 +487,26 @@ def _is_watcha_collection_api(url: str, kind: str) -> bool:
     return "/api/users/" in url and f"/{kind}" in url
 
 
-def _capture_api_seed(page, kind: str, collection_url: str) -> tuple[dict, Optional[dict]]:
+def _capture_api_seed(
+    page, kind: str, collection_url: str, attempts: int = 3
+) -> tuple[dict, Optional[dict]]:
     """페이지를 한 번 열어 앱이 받은 첫 API 응답과 인증 관련 헤더를 캡처한다.
     device-identifier 등이 세션에 묶여 있으므로 하드코딩 대신 런타임 캡처가 안전하다.
-    느린 VM/headless 에서도 요청이 뜰 때까지 최대 30초 대기(고정 sleep 대신)."""
+    느린 VM 에서는 간헐적으로 45초 안에 요청이 안 떠서 타임아웃만 재시도한다."""
 
     def is_target(resp):
         return _is_watcha_collection_api(resp.url, kind)
 
-    try:
-        with page.expect_response(is_target, timeout=30000) as info:
-            page.goto(normalize_watchapedia_url(collection_url), wait_until="domcontentloaded")
-        resp = info.value
-    except Exception:
+    resp = None
+    for attempt in range(attempts):
+        try:
+            with page.expect_response(is_target, timeout=45000) as info:
+                page.goto(normalize_watchapedia_url(collection_url), wait_until="domcontentloaded")
+            resp = info.value
+            break
+        except Exception as exc:
+            print(f"API {kind} 응답 캡처 실패 ({attempt + 1}/{attempts}): {type(exc).__name__}")
+    if resp is None:
         return {}, None
 
     ensure_logged_in(page)  # 세션 만료면 여기서 fail-fast(헤드리스/cron)
