@@ -59,16 +59,23 @@ def _capture_headers(page, sample_code: str, attempts: int = 3) -> dict:
     def is_target(req):
         return "/api/contents/" in req.url
 
-    # 느린 VM 에서 간헐적으로 요청이 늦게 떠서 타임아웃만 재시도한다.
+    # 느린 VM 에서 페이지 로드가 30초를 넘기곤 해서 goto 는 commit 즉시 반환하고
+    # 요청만 60초 기다린다. 실패하면 이전 로딩을 끊고 재시도한다.
     req = None
     for attempt in range(attempts):
         try:
-            with page.expect_request(is_target, timeout=45000) as info:
-                page.goto(f"{WATCHA_BASE}/ko/contents/{sample_code}", wait_until="domcontentloaded")
+            with page.expect_request(is_target, timeout=60000) as info:
+                page.goto(
+                    f"{WATCHA_BASE}/ko/contents/{sample_code}", wait_until="commit", timeout=60000
+                )
             req = info.value
             break
         except Exception as exc:
             print(f"왓챠 헤더 캡처 실패 ({attempt + 1}/{attempts}): {type(exc).__name__}")
+            try:
+                page.goto("about:blank")
+            except Exception:
+                pass
     if req is None:
         return {}
     return {

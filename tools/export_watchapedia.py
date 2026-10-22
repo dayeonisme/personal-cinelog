@@ -492,20 +492,31 @@ def _capture_api_seed(
 ) -> tuple[dict, Optional[dict]]:
     """페이지를 한 번 열어 앱이 받은 첫 API 응답과 인증 관련 헤더를 캡처한다.
     device-identifier 등이 세션에 묶여 있으므로 하드코딩 대신 런타임 캡처가 안전하다.
-    느린 VM 에서는 간헐적으로 45초 안에 요청이 안 떠서 타임아웃만 재시도한다."""
+    느린 VM 에서는 페이지 로드가 30초를 넘기곤 해서, goto 는 commit 즉시 반환하고
+    API 응답만 60초 기다린다. 실패하면 about:blank 로 이전 로딩을 끊고 재시도한다
+    (안 끊으면 다음 회차가 이전 회차 응답을 잡고, 재탐색으로 body 가 사라진다)."""
 
     def is_target(resp):
         return _is_watcha_collection_api(resp.url, kind)
 
     resp = None
+    payload = None
     for attempt in range(attempts):
         try:
-            with page.expect_response(is_target, timeout=45000) as info:
-                page.goto(normalize_watchapedia_url(collection_url), wait_until="domcontentloaded")
+            with page.expect_response(is_target, timeout=60000) as info:
+                page.goto(
+                    normalize_watchapedia_url(collection_url), wait_until="commit", timeout=60000
+                )
             resp = info.value
+            payload = (resp.json() or {}) if resp.status == 200 else None
             break
         except Exception as exc:
+            resp = None
             print(f"API {kind} 응답 캡처 실패 ({attempt + 1}/{attempts}): {type(exc).__name__}")
+            try:
+                page.goto("about:blank")
+            except Exception:
+                pass
     if resp is None:
         return {}, None
 
@@ -516,7 +527,7 @@ def _capture_api_seed(
         if resp.status == 403:
             print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
         return headers, None
-    return headers, resp.json() or {}
+    return headers, payload
 
 
 _FETCH_FORBIDDEN_HEADERS = {"cookie", "origin", "referer", "user-agent"}

@@ -173,8 +173,10 @@ def test_capture_api_seed_retries_after_timeout(monkeypatch):
         def expect_response(self, predicate, timeout):
             return Waiter(self)
 
-        def goto(self, url, wait_until):
-            pass
+        urls = []
+
+        def goto(self, url, wait_until="load", timeout=None):
+            self.urls.append(url)
 
     page = SeedPage()
     headers, payload = export._capture_api_seed(
@@ -182,5 +184,6 @@ def test_capture_api_seed_retries_after_timeout(monkeypatch):
     )
 
     assert page.calls == 2
+    assert "about:blank" in page.urls
     assert headers == {"accept": "application/json"}
     assert payload == {"result": {"result": []}}
