@@ -84,13 +84,32 @@ def _capture_headers(page, sample_code: str, attempts: int = 3) -> dict:
     }
 
 
-def _watcha_detail(page, headers: dict, code: str, timeout: int = 30000):
-    resp = page.request.get(
-        f"{WATCHA_BASE}/api/contents/{code}", headers=headers, timeout=timeout
-    )
-    if resp.status != 200:
-        return None
-    return (resp.json() or {}).get("result") or {}
+# page.request(Playwright HTTP 클라이언트)로 부르면 왓챠 WAF 가 403 HTML 을 돌려준다.
+# 페이지 안에서 fetch 해야 브라우저 쿠키/WAF 토큰이 실려 200 이 온다.
+_FETCH_JS = """async ([url, headers]) => {
+    const resp = await fetch(url, {headers, credentials: "include"});
+    return {status: resp.status, body: resp.status === 200 ? await resp.json() : null};
+}"""
+
+
+class WatchaBlocked(Exception):
+    """왓챠가 재시도 후에도 403/429 로 막음 — '상세 없음'과 구분해 실패로 드러낸다."""
+
+
+def _watcha_detail(page, headers: dict, code: str, backoff=(0, 30, 90)):
+    """왓챠 상세 result 를 반환. 404 등 콘텐츠 없음은 None, 차단이 계속되면 WatchaBlocked."""
+    status = None
+    for wait in backoff:
+        if wait:
+            print(f"  왓챠 차단(status {status}) — {wait}초 대기 후 재시도", flush=True)
+            time.sleep(wait)
+        resp = page.evaluate(_FETCH_JS, [f"{WATCHA_BASE}/api/contents/{code}", headers])
+        status = resp.get("status")
+        if status == 200:
+            return (resp.get("body") or {}).get("result") or {}
+        if status not in (403, 429):
+            return None
+    raise WatchaBlocked(f"{code}: status {status}")
 
 
 def main() -> None:
@@ -99,8 +118,8 @@ def main() -> None:
     ap.add_argument("--commit", action="store_true")
     ap.add_argument("--limit", type=int)
     ap.add_argument("--movie-ids-file", type=Path)
-    # choose_match 는 정확 제목/원제 매칭만 반환(퍼지 없음). 80=exact_original_title
-    # (원제 정확, 연도만 재개봉/지역차로 어긋남) 까지 신뢰. 연도 일치는 100이라 우선됨.
+    # choose_match 는 정확 제목/원제 매칭만 반환(퍼지 없음). 연도가 양쪽에 있는데 ±1 을
+    # 넘게 어긋나면 후보에서 빼므로, 80(exact_original_title)은 연도 정보가 없을 때만 나온다.
     ap.add_argument("--threshold", type=int, default=80)
     ap.add_argument("--retries", type=int, default=2)
     ap.add_argument("--sleep", type=float, default=0.2)
@@ -144,12 +163,24 @@ def main() -> None:
                 print("왓챠 API 헤더 캡처 실패 — 중단(xvfb/세션 확인)")
                 browser.close()
                 sys.exit(1)
+            # goto 가 commit 즉시 반환하므로 in-page fetch 전에 문서 로드를 기다린다.
+            try:
+                page.wait_for_load_state("domcontentloaded", timeout=60000)
+            except Exception:
+                pass
 
             for movie in movies:
                 checked += 1
                 code = movie.imdb_id.split(":", 1)[1]
                 try:
                     detail = _watcha_detail(page, headers, code)
+                except WatchaBlocked as exc:
+                    # 지금까지 보강분은 저장하고 실패로 종료 → watcha-sync.sh 에러 핸들러 동작.
+                    print(f"왓챠 상세 API 차단 — 중단: {exc}")
+                    if args.commit:
+                        db.session.commit()
+                    browser.close()
+                    sys.exit(1)
                 except Exception:
                     detail = None
 

@@ -331,3 +331,41 @@ def test_search_movie_does_not_send_year_filter(monkeypatch):
     enrichment.search_movie("기생충", "2019", retries=0)
 
     assert "year" not in captured
+
+
+def test_choose_match_rejects_same_title_with_distant_year():
+    # 로마의 휴일(1953)을 2017 동명작에 붙이던 오매칭 회귀 방지.
+    result = choose_match(
+        title="로마의 휴일",
+        year="1953",
+        results=[{"id": 473736, "title": "로마의 휴일", "release_date": "2017-08-30"}],
+    )
+
+    assert result is None
+
+
+def test_choose_match_skips_distant_year_and_keeps_year_match():
+    result = choose_match(
+        title="이유없는 반항",
+        year="1955",
+        results=[
+            {"id": 10412, "title": "이유없는 반항", "original_title": "Romper Stomper", "release_date": "1992-11-12"},
+            {"id": 221, "title": "이유 없는 반항", "original_title": "Rebel Without a Cause", "release_date": "1955-10-27"},
+        ],
+    )
+
+    assert result is not None
+    assert result.tmdb_id == 221
+
+
+def test_search_movie_does_not_send_region(monkeypatch):
+    captured = {}
+
+    def fake_get(path, params, retries):
+        captured.update(params)
+        return {"results": []}
+
+    monkeypatch.setattr(enrichment, "tmdb_get", fake_get)
+    enrichment.search_movie("바람과 함께 사라지다", "1939", retries=0)
+
+    assert "region" not in captured
