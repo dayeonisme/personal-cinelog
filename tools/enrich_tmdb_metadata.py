@@ -128,6 +128,10 @@ def choose_match(title: str, year: Optional[str], results: Iterable[Dict]) -> Op
                 year_match = abs(int(item_year) - int(year)) <= 1
             except (TypeError, ValueError):
                 year_match = False
+            if not year_match:
+                # 양쪽 연도가 다 있는데 어긋나면 동명 리메이크/다른 작품이다.
+                # 제목만 같다고 받아들이면 오매칭(예: 로마의 휴일 1953 → 2017 동명작)이 된다.
+                continue
 
         if year_match:
             score = 100 if item_year == year else 96
@@ -249,10 +253,11 @@ def search_movie(title: str, year: Optional[str], retries: int) -> Dict:
     # 개봉 연기 등으로 DB 등록 연도와 실제 release_date 연도가 1년 이상
     # 어긋난 작품은 애초에 후보에서 빠진다. year는 API 요청에 넘기지 않고
     # choose_match의 ±1년 매칭 로직에서만 사용한다.
+    # region을 넘기면 release_date가 해당 지역 개봉일로 바뀐다(예: 바람과 함께
+    # 사라지다 1939 → KR 1957). 그러면 원 개봉연도 기준 연도 매칭이 깨지므로 넘기지 않는다.
     params = {
         "query": title,
         "language": "ko-KR",
-        "region": "KR",
         "include_adult": "false",
         "page": 1,
     }
