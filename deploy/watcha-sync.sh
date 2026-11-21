@@ -84,6 +84,11 @@ echo "[$(date -Is)] import 시작 (--commit)"
 
 CHANGED_COUNT="$(grep -c '^[0-9]' "$CHANGED_MOVIE_IDS" 2>/dev/null || true)"
 
+# import 는 '왓챠 별점' 평가만 만들고 '왓챠백업' 태그는 달지 않는다. 전체 대상 멱등 동기화.
+echo "[$(date -Is)] 왓챠백업 해시태그 동기화"
+"$PY" tools/migrate_watcha_hashtag.py || \
+  echo "  (왓챠백업 태그 동기화 실패 — 다음 실행 때 재시도됨)"
+
 # 1차 보강: 변경 여부와 무관하게 항상 전체 스윕.
 # --movie-ids-file 없이 poster_url IS NULL 전체를 타겟 → 과거 실패분도 매 sync 재시도.
 echo "[$(date -Is)] TMDb 보강 1차 (한국어 제목, 전체 누락 스윕)"
@@ -93,13 +98,26 @@ echo "[$(date -Is)] TMDb 보강 1차 (한국어 제목, 전체 누락 스윕)"
 # 2차 보강: 브라우저로 왓챠 원제+연도 취득 후 TMDb 재매칭.
 # --limit 30: 매 sync 최대 30개만 처리해 실행 시간 제한 (나머지는 다음 sync 때).
 echo "[$(date -Is)] TMDb 보강 2차 (왓챠 원제, 전체 누락 스윕 최대 30개)"
-xvfb-run -a "$PY" tools/enrich_via_watcha_detail.py --storage-state "$STATE" --limit 30 --commit --sleep 0.2 || \
-  echo "  (2차 보강 실패 — xvfb/세션 확인 필요)"
+# 실패(헤더 캡처 실패/왓챠 차단 시 exit 1)해도 나머지 단계는 진행하고,
+# 마지막에 비정상 종료해 cinelog-watcha-sync-failed 알림이 뜨게 한다.
+DETAIL_FAILED=0
+xvfb-run -a "$PY" tools/enrich_via_watcha_detail.py --storage-state "$STATE" --limit 30 --commit --sleep 0.2 || {
+  DETAIL_FAILED=1
+  echo "  (2차 보강 실패 — xvfb/세션/왓챠 차단 확인 필요)"
+}
+
+finish() {
+  if [ "$DETAIL_FAILED" -ne 0 ]; then
+    echo "[$(date -Is)] 동기화 완료(2차 보강 실패) — 알림을 위해 비정상 종료"
+    exit 1
+  fi
+  echo "[$(date -Is)] 동기화 완료"
+  exit 0
+}
 
 if [ "${CHANGED_COUNT:-0}" -eq 0 ]; then
   echo "[$(date -Is)] 신규/변경 영화 없음 — 태그 백필 생략"
-  echo "[$(date -Is)] 동기화 완료"
-  exit 0
+  finish
 fi
 
 echo "[$(date -Is)] 신규/변경 영화 ${CHANGED_COUNT}개 태그 백필"
@@ -109,4 +127,4 @@ echo "[$(date -Is)] 원작존재 해시태그 백필"
 "$PY" tools/backfill_original_source_tag.py --commit --movie-ids-file "$CHANGED_MOVIE_IDS" --sleep 0.2 || \
   echo "  (태그 백필 일부 실패 — 다음 실행 때 재시도됨)"
 
-echo "[$(date -Is)] 동기화 완료"
+finish
