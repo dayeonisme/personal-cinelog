@@ -137,53 +137,103 @@ def test_collect_page_movies_api_only_fails_instead_of_scroll_fallback(monkeypat
     assert page.fallback_used is False
 
 
-def test_capture_api_seed_retries_after_timeout(monkeypatch):
+class FakeRequest:
+    def __init__(self, url, headers):
+        self.url = url
+        self.headers = headers
+
+
+def test_is_watcha_app_api_request_requires_frograms_headers():
+    app_headers = {"accept": "application/json", "x-frograms-client": "Galaxy-Web-App"}
+
+    assert export._is_watcha_app_api_request(
+        FakeRequest("https://pedia.watcha.com/api/notifications/unread", app_headers)
+    )
+    assert not export._is_watcha_app_api_request(
+        FakeRequest("https://pedia.watcha.com/api/legals", {"accept": "application/json"})
+    )
+    assert not export._is_watcha_app_api_request(
+        FakeRequest("https://sentry.io/api/267909/envelope/", app_headers)
+    )
+
+
+def test_collection_api_url_uses_redesigned_endpoint():
+    assert export.collection_api_url("u1", "wishes") == (
+        "https://pedia.watcha.com/api/users/u1/wishes/movie"
+        "?page=1&size=30&sort_direction=desc&sort_option=acted_at"
+    )
+
+
+class SeedPage:
+    """첫 goto 는 타임아웃, 두 번째에 앱 API 요청이 잡히는 페이지."""
+
+    def __init__(self, fetch_results):
+        self.calls = 0
+        self.urls = []
+        self.fetched = []
+        self.fetch_results = list(fetch_results)
+
+    def expect_request(self, predicate, timeout):
+        page = self
+
+        class Waiter:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                page.calls += 1
+                if page.calls == 1:
+                    raise TimeoutError("no request")
+                return False
+
+            @property
+            def value(self):
+                req = FakeRequest(
+                    "https://pedia.watcha.com/api/notifications/unread",
+                    {"accept": "application/json", "x-frograms-client": "Galaxy-Web-App", "host": "x"},
+                )
+                assert predicate(req)
+                return req
+
+        return Waiter()
+
+    def goto(self, url, wait_until="load", timeout=None):
+        self.urls.append(url)
+
+    def evaluate(self, _script, args):
+        url, headers = args
+        self.fetched.append((url, headers))
+        return self.fetch_results.pop(0)
+
+    def wait_for_timeout(self, _ms):
+        return None
+
+
+def test_capture_api_seed_captures_headers_then_fetches_first_page(monkeypatch):
     monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)
+    first_page = api_payload(["mNew"], next_uri="/api/users/u1/ratings/movie?page=2")
+    page = SeedPage([{"status": 200, "body": first_page}])
 
-    class FakeResponse:
-        url = "https://pedia.watcha.com/api/users/u1/contents/movies/ratings"
-        status = 200
-
-        class request:
-            headers = {"accept": "application/json"}
-
-        def json(self):
-            return {"result": {"result": []}}
-
-    class Waiter:
-        def __init__(self, page):
-            self.page = page
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, exc_type, exc, tb):
-            self.page.calls += 1
-            if self.page.calls == 1:
-                raise TimeoutError("no response")
-            return False
-
-        @property
-        def value(self):
-            return FakeResponse()
-
-    class SeedPage:
-        calls = 0
-
-        def expect_response(self, predicate, timeout):
-            return Waiter(self)
-
-        urls = []
-
-        def goto(self, url, wait_until="load", timeout=None):
-            self.urls.append(url)
-
-    page = SeedPage()
     headers, payload = export._capture_api_seed(
         page, "ratings", "https://pedia.watcha.com/ko-KR/users/u1/contents/movies/ratings"
     )
 
     assert page.calls == 2
     assert "about:blank" in page.urls
-    assert headers == {"accept": "application/json"}
-    assert payload == {"result": {"result": []}}
+    assert headers == {"accept": "application/json", "x-frograms-client": "Galaxy-Web-App"}
+    assert payload == first_page
+    assert page.fetched == [(export.collection_api_url("u1", "ratings"), headers)]
+
+
+def test_capture_api_seed_returns_no_payload_on_403(monkeypatch):
+    monkeypatch.setattr(export, "ensure_logged_in", lambda page: None)
+    page = SeedPage([{"status": 403, "body": None}] * 3)
+    page.calls = 1  # 첫 캡처부터 성공
+
+    headers, payload = export._capture_api_seed(
+        page, "wishes", "https://pedia.watcha.com/ko-KR/users/u1/contents/movies/wishes"
+    )
+
+    assert headers
+    assert payload is None
+    assert len(page.fetched) == 3
