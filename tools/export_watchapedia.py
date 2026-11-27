@@ -483,48 +483,71 @@ def watcha_api_headers(headers: dict) -> dict:
     }
 
 
-def _is_watcha_collection_api(url: str, kind: str) -> bool:
-    return "/api/users/" in url and f"/{kind}" in url
+WATCHA_BASE = "https://pedia.watcha.com"
+API_PAGE_SIZE = 30
+
+
+def _is_watcha_app_api_request(req) -> bool:
+    """왓챠 웹앱이 x-frograms-* 헤더를 붙여 보내는 내부 API 요청인지."""
+    if not req.url.startswith(f"{WATCHA_BASE}/api/"):
+        return False
+    return any(k.lower().startswith("x-frograms") for k in (req.headers or {}))
+
+
+def collection_api_url(uid: str, kind: str, page_no: int = 1) -> str:
+    """2026-11 개편 후 컬렉션 API. 응답 구조(result.result[]/next_uri)는 이전과 같다."""
+    return (
+        f"{WATCHA_BASE}/api/users/{uid}/{kind}/movie"
+        f"?page={page_no}&size={API_PAGE_SIZE}&sort_direction=desc&sort_option=acted_at"
+    )
 
 
 def _capture_api_seed(
     page, kind: str, collection_url: str, attempts: int = 3
 ) -> tuple[dict, Optional[dict]]:
-    """페이지를 한 번 열어 앱이 받은 첫 API 응답과 인증 관련 헤더를 캡처한다.
+    """페이지를 한 번 열어 앱의 인증 헤더(x-frograms-*)를 캡처하고 첫 페이지를 직접 받는다.
     device-identifier 등이 세션에 묶여 있으므로 하드코딩 대신 런타임 캡처가 안전하다.
-    느린 VM 에서는 페이지 로드가 30초를 넘기곤 해서, goto 는 commit 즉시 반환하고
-    API 응답만 60초 기다린다. 실패하면 about:blank 로 이전 로딩을 끊고 재시도한다
-    (안 끊으면 다음 회차가 이전 회차 응답을 잡고, 재탐색으로 body 가 사라진다)."""
 
-    def is_target(resp):
-        return _is_watcha_collection_api(resp.url, kind)
+    2026-11 왓챠 개편으로 컬렉션 URL 이 /users/<id>/activity?tab=... 로 리다이렉트되고
+    첫 페이지는 SSR 로 내려와, 스크롤 전에는 컬렉션 API 요청이 아예 발생하지 않는다.
+    그래서 컬렉션 응답을 기다리지 않고, 로드 시 항상 나가는 아무 /api/ 요청
+    (notifications/legals 등)에서 헤더만 캡처한 뒤 첫 페이지를 브라우저 fetch 로 요청한다.
+    느린 VM 대비: goto 는 commit 즉시 반환, 요청만 60초 대기, 실패 시 about:blank 후 재시도."""
+    m = re.search(r"/users/([^/?#]+)/", collection_url)
+    if not m:
+        return {}, None
+    uid = m.group(1)
 
-    resp = None
-    payload = None
+    req = None
     for attempt in range(attempts):
         try:
-            with page.expect_response(is_target, timeout=60000) as info:
+            with page.expect_request(_is_watcha_app_api_request, timeout=60000) as info:
                 page.goto(
                     normalize_watchapedia_url(collection_url), wait_until="commit", timeout=60000
                 )
-            resp = info.value
-            payload = (resp.json() or {}) if resp.status == 200 else None
+            req = info.value
             break
         except Exception as exc:
-            resp = None
-            print(f"API {kind} 응답 캡처 실패 ({attempt + 1}/{attempts}): {type(exc).__name__}")
+            req = None
+            print(f"API {kind} 헤더 캡처 실패 ({attempt + 1}/{attempts}): {type(exc).__name__}")
             try:
                 page.goto("about:blank")
             except Exception:
                 pass
-    if resp is None:
+    if req is None:
         return {}, None
 
     ensure_logged_in(page)  # 세션 만료면 여기서 fail-fast(헤드리스/cron)
-    headers = watcha_api_headers(resp.request.headers)
-    if resp.status != 200:
-        print(f"API {kind} initial status {resp.status} — 중단")
-        if resp.status == 403:
+    headers = watcha_api_headers(req.headers)
+    status, payload = 0, None
+    for attempt in range(3):
+        status, payload = _fetch_via_page(page, collection_api_url(uid, kind), headers)
+        if status == 200:
+            break
+        page.wait_for_timeout(1500 * (attempt + 1))
+    if status != 200 or payload is None:
+        print(f"API {kind} initial status {status or '?'} — 중단")
+        if status == 403:
             print("API 403: 왓챠 세션 만료/CAPTCHA/브라우저 인증 헤더 변경 가능성이 큽니다.")
         return headers, None
     return headers, payload
@@ -588,7 +611,6 @@ def collect_via_api(
         print("API 응답 캡처 실패 — 스크롤로 폴백")
         return []
 
-    base = "https://pedia.watcha.com"
     movies = []
     consecutive_existing = 0
     existing_ids = existing_ids or set()
@@ -611,7 +633,7 @@ def collect_via_api(
             break
         status, next_payload = 0, None
         for attempt in range(4):
-            status, next_payload = _fetch_via_page(page, base + uri, headers)
+            status, next_payload = _fetch_via_page(page, WATCHA_BASE + uri, headers)
             if status == 200:
                 break
             page.wait_for_timeout(1500 * (attempt + 1))  # 일시적 오류(429/5xx) 백오프 후 재시도
